@@ -1,7 +1,5 @@
 from flask import Flask, render_template, redirect, url_for
 from flask_login import LoginManager
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.exceptions import NotFound
 
 from config import Config
 from models import db, User
@@ -66,17 +64,20 @@ def create_wsgi_app(config_class=Config):
     (np. do wystawienia pod Tailscale Serve/Funnel pod ścieżką inną niż "/",
     żeby nie kolidować z inną appką na tej samej domenie).
 
-    Jeśli ustawiona jest zmienna środowiskowa PREFIX (np. "/planowiec"),
-    aplikacja Flask zostaje zamontowana pod tą ścieżką za pomocą
-    werkzeug.DispatcherMiddleware. Dzięki temu Flask poprawnie ustawia
-    SCRIPT_NAME, więc url_for(), request.script_root oraz linki do
-    plików statycznych automatycznie zawierają prefiks — nie trzeba
-    niczego przepisywać ręcznie w szablonach.
+    WAŻNE (zweryfikowane w praktyce): Tailscale Serve z opcją --set-path
+    ŚCINA prefiks z URL-a zanim przekaże request dalej do backendu —
+    backend dostaje ścieżkę BEZ prefiksu (np. /dashboard/... a nie
+    /planowiec/dashboard/...). Dlatego routing we Flasku musi zostać
+    bez zmian (blueprinty zarejestrowane bez prefiksu), a jedyne co
+    trzeba doklejić to prefiks w generowanych linkach (url_for, redirecty,
+    linki do plików statycznych) — inaczej przeglądarka "wypadnie"
+    spod /planowiec przy pierwszym kliknięciu/przekierowaniu.
 
-    WAŻNE: Tailscale Serve z opcją --set-path NIE ścina prefiksu z URL-a
-    zanim przekaże request dalej do backendu — backend dostaje pełną
-    ścieżkę (np. /planowiec/dashboard/...). Dlatego PREFIX tutaj musi
-    być identyczny z tym, co ustawisz w `tailscale serve --set-path`.
+    Realizujemy to przez ustawienie WSGI environ["SCRIPT_NAME"] = PREFIX,
+    NIE ruszając PATH_INFO. Flask użyje SCRIPT_NAME do generowania
+    poprawnych, prefiksowanych adresów (url_for, request.script_root),
+    a dopasowywanie tras dalej odbywa się na podstawie (nieprefiksowanego)
+    PATH_INFO, dokładnie tak jak przychodzi z Tailscale.
     """
     flask_app = create_app(config_class)
     init_db(flask_app)
@@ -88,7 +89,25 @@ def create_wsgi_app(config_class=Config):
     if not prefix.startswith("/"):
         prefix = "/" + prefix
 
-    return DispatcherMiddleware(NotFound(), {prefix: flask_app})
+    return PrefixMiddleware(flask_app, prefix)
+
+
+class PrefixMiddleware:
+    """Doklein prefiks do SCRIPT_NAME, nie ruszając PATH_INFO.
+
+    Używane, gdy reverse proxy (Tailscale Serve --set-path) ścina prefiks
+    z requestu, zanim ten trafi do appki, ale appka i tak ma generować
+    linki/przekierowania z tym prefiksem, żeby przeglądarka została pod
+    właściwym adresem.
+    """
+
+    def __init__(self, app, prefix):
+        self.app = app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        environ["SCRIPT_NAME"] = self.prefix
+        return self.app(environ, start_response)
 
 
 if __name__ == "__main__":
@@ -96,7 +115,7 @@ if __name__ == "__main__":
     if isinstance(application, Flask):
         application.run(host="0.0.0.0", port=5000, debug=True)
     else:
-        # Aplikacja owinięta w DispatcherMiddleware (ustawiony PREFIX) —
+        # Aplikacja owinięta w PrefixMiddleware (ustawiony PREFIX) —
         # to już nie jest obiekt Flask, więc odpalamy ją przez werkzeug.
         from werkzeug.serving import run_simple
         run_simple("0.0.0.0", 5000, application, use_reloader=True, use_debugger=True)

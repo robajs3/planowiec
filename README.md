@@ -131,22 +131,24 @@ tailscale serve --bg --set-path /planowiec http://127.0.0.1:5000
 Wtedy Twoja druga appka może dalej spokojnie stać pod `/`, a Planowiec
 będzie dostępny pod `https://twoj-node.twoj-tailnet.ts.net/planowiec`.
 
-**Ważne:** Tailscale Serve z `--set-path` przekazuje do backendu pełną
-ścieżkę razem z prefiksem (nie ścina go). Dlatego appka musi wiedzieć,
-pod jakim prefiksem stoi — inaczej połamią się linki, statyczne pliki
-i wywołania API. Ta appka jest już na to przygotowana: ustaw zmienną
-środowiskową `PREFIX` na dokładnie tę samą wartość, co w `--set-path`:
+**Ważne (zweryfikowane w praktyce):** ta wersja Tailscale Serve **ścina prefiks**
+z URL-a zanim przekaże request do backendu — appka dostaje ścieżkę bez
+`/planowiec` (np. `/dashboard/...`). Appka jest już na to przygotowana:
+gdy ustawisz `PREFIX`, dokleja go z powrotem tylko do generowanych linków
+i przekierowań (przez `SCRIPT_NAME`), nie ruszając routingu — dzięki
+temu przeglądarka zostaje pod `/planowiec/...`, a appka wewnętrznie
+i tak dostaje "gołe" ścieżki od Tailscale.
+
+Ustaw zmienną środowiskową `PREFIX` na dokładnie tę samą wartość, co w `--set-path`:
 
 ```
 # w .env (Docker) albo jako zmienna środowiskowa procesu
 PREFIX=/planowiec
 ```
 
-Appka sama zamontuje się wtedy pod tym prefiksem (`werkzeug.DispatcherMiddleware`
-w `app.py`) — wszystkie linki (`url_for`), pliki statyczne i wywołania API
-w JS (`static/js/calendar.js`) automatycznie uwzględnią `/planowiec`.
-Żądania bez prefiksu dostaną 404, więc appka na pewno nie „ukradnie”
-ścieżki `/` innej aplikacji.
+Appka sama doklei ten prefiks do wszystkich generowanych linków
+(`url_for`, `request.script_root`), plików statycznych i wywołań API
+w JS (`static/js/calendar.js`) — patrz `PrefixMiddleware` w `app.py`.
 
 Jeśli appka ma stać **jako jedyna appka pod `/`** na danym hostname —
 po prostu zostaw `PREFIX` puste i użyj `tailscale serve` bez `--set-path`.
