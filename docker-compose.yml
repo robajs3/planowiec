@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-planowiec_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-planowiec_pass}
+      POSTGRES_DB: ${DB_NAME:-planowiec}
+    volumes:
+      - planowiec_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-planowiec_user} -d ${DB_NAME:-planowiec}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-zmien-mnie-na-losowy-dlugi-ciag-znakow}
+      DB_USER: ${DB_USER:-planowiec_user}
+      DB_PASSWORD: ${DB_PASSWORD:-planowiec_pass}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-planowiec}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      # Ustaw np. na "/planowiec", jeśli appka ma być wystawiona pod
+      # prefiksem (np. przez `tailscale serve --set-path /planowiec`),
+      # żeby nie kolidować z inną appką stojącą na tej samej domenie
+      # pod "/". Puste = appka działa pod "/".
+      PREFIX: ${PREFIX:-}
+    ports:
+      # Zmapowane na localhost — Tailscale Serve wskazuje właśnie na ten port.
+      - "${APP_PORT:-5000}:5000"
+
+volumes:
+  planowiec_pgdata:

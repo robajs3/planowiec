@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Planowiec{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script>
+    // Prefiks URL, pod jakim zamontowana jest aplikacja (np. "/planowiec"
+    // gdy wystawiona przez Tailscale Serve pod ścieżką inną niż "/").
+    // Puste, gdy appka stoi pod "/". Wykorzystywane przez static/js/calendar.js
+    // do budowania poprawnych URL-i do API, niezależnie od prefiksu.
+    window.APP_URL_PREFIX = "{{ request.script_root }}";
+  </script>
+  <script>
+    // Ustawiamy motyw przed narysowaniem strony, żeby uniknąć błysku jasnego tła.
+    (function () {
+      var saved = localStorage.getItem("planowiec-theme");
+      var theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  {% if current_user.is_authenticated %}
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <a href="{{ url_for('dashboard.index') }}">
+          <span class="logo-icon">🗓️</span> Planowiec
+        </a>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+          <span class="nav-icon">📅</span> Mój plan
+        </a>
+        <a class="nav-item {% if request.blueprint == 'friends' %}active{% endif %}" href="{{ url_for('friends.index') }}">
+          <span class="nav-icon">👥</span> Znajomi
+        </a>
+        <a class="nav-item {% if request.blueprint == 'groups' %}active{% endif %}" href="{{ url_for('groups.index') }}">
+          <span class="nav-icon">🧩</span> Grupy
+        </a>
+        <a class="nav-item {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+          <span class="nav-icon">⚙️</span> Profil
+        </a>
+        {% if current_user.is_admin %}
+        <a class="nav-item {% if request.blueprint == 'admin' %}active{% endif %}" href="{{ url_for('admin.index') }}">
+          <span class="nav-icon">🛡️</span> Panel admina
+        </a>
+        {% endif %}
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="avatar" style="background:{{ current_user.avatar_color }}; width:34px; height:34px; font-size:.82rem;">
+            {{ current_user.initials }}
+          </div>
+          <div class="sidebar-user-info">
+            <div class="name">{{ current_user.name }}</div>
+            <div class="username">@{{ current_user.username }}</div>
+          </div>
+          <a class="sidebar-logout" href="{{ url_for('auth.logout') }}" title="Wyloguj">⏻</a>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <button class="menu-toggle" id="menu-toggle">☰</button>
+        <h1>{% block page_title %}Planowiec{% endblock %}</h1>
+        <button class="theme-toggle" id="theme-toggle" type="button" title="Przełącz tryb ciemny/jasny" aria-label="Przełącz tryb ciemny/jasny">🌙</button>
+      </header>
+      <main class="page">
+        {% block content %}{% endblock %}
+      </main>
+      <footer class="app-footer">
+        <span>© 2026 Planowiec</span>
+        <a href="{{ url_for('dashboard.privacy') }}">Polityka prywatności</a>
+      </footer>
+    </div>
+  </div>
+  {% else %}
+    {% block guest_content %}{% endblock %}
+    <footer class="app-footer app-footer-guest">
+      <span>© 2026 Planowiec</span>
+      <a href="{{ url_for('dashboard.privacy') }}">Polityka prywatności</a>
+    </footer>
+  {% endif %}
+
+  <div class="flash-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

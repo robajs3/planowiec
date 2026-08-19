@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Panel admina · Planowiec{% endblock %}
+{% block page_title %}Panel administracyjny{% endblock %}
+
+{% block content %}
+
+<!-- Statystyki -->
+<div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
+  <div class="card" style="flex:1;min-width:140px;">
+    <div class="card-body" style="padding:16px 20px;">
+      <div style="font-size:1.8rem;font-weight:800;color:var(--primary);">{{ users|length }}</div>
+      <div style="font-size:.78rem;color:var(--text-muted);">Użytkowników</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1;min-width:140px;">
+    <div class="card-body" style="padding:16px 20px;">
+      <div style="font-size:1.8rem;font-weight:800;color:var(--secondary);">{{ users|selectattr('is_admin')|list|length }}</div>
+      <div style="font-size:.78rem;color:var(--text-muted);">Administratorów</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1;min-width:140px;">
+    <div class="card-body" style="padding:16px 20px;">
+      <div style="font-size:1.8rem;font-weight:800;color:var(--warning);">{{ announcements|selectattr('is_visible')|list|length }}</div>
+      <div style="font-size:.78rem;color:var(--text-muted);">Aktywnych ogłoszeń</div>
+    </div>
+  </div>
+</div>
+
+<!-- Ogłoszenia systemowe -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header"><h3>📢 Ogłoszenia systemowe</h3></div>
+  <div class="card-body">
+
+    <form method="POST" action="{{ url_for('admin.add_announcement') }}"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 18px;margin-bottom:18px;">
+      <div style="font-weight:700;font-size:.82rem;margin-bottom:12px;color:var(--text-muted);">
+        + Nowe ogłoszenie
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:10px;">
+        <input type="text" name="title" class="form-control" placeholder="Tytuł ogłoszenia…" required>
+        <select name="type" class="form-control" style="width:150px;">
+          <option value="info">ℹ️ Info</option>
+          <option value="warning">⚠️ Ostrzeżenie</option>
+          <option value="danger">🚨 Krytyczne</option>
+          <option value="success">✅ Sukces</option>
+        </select>
+      </div>
+      <textarea name="content" class="form-control" placeholder="Treść ogłoszenia…" rows="2" required style="margin-bottom:10px;"></textarea>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label class="form-label" style="margin:0;font-weight:500;">Wygasa:</label>
+        <input type="datetime-local" name="expires_at" class="form-control" style="width:auto;">
+        <span style="font-size:.75rem;color:var(--text-muted);">(opcjonalnie)</span>
+        <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;">Opublikuj</button>
+      </div>
+    </form>
+
+    {% if announcements %}
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for ann in announcements %}
+      {% set css_type = {'info': 'announcement-info', 'warning': 'announcement-warning', 'danger': 'announcement-danger', 'success': 'announcement-success'}.get(ann.type, 'announcement-info') %}
+      {% set icons = {'info': 'ℹ️', 'warning': '⚠️', 'danger': '🚨', 'success': '✅'} %}
+      <div class="announcement {{ css_type }}" style="margin-bottom:0;opacity:{% if not ann.is_visible %}.5{% else %}1{% endif %};">
+        <span class="icon">{{ icons.get(ann.type, 'ℹ️') }}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="title">
+            {{ ann.title }}
+            {% if not ann.is_active %}<span style="font-weight:400;font-size:.72rem;opacity:.7;">[dezaktywowane]</span>
+            {% elif ann.is_expired %}<span style="font-weight:400;font-size:.72rem;opacity:.7;">[wygasło]</span>{% endif %}
+          </div>
+          <div class="body">{{ ann.content }}</div>
+          <div style="font-size:.72rem;margin-top:6px;opacity:.65;display:flex;gap:12px;flex-wrap:wrap;">
+            <span>👤 {{ ann.author.username }}</span>
+            <span>🗓 {{ ann.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+            {% if ann.expires_at %}<span>⏳ do {{ ann.expires_at.strftime('%d.%m.%Y %H:%M') }}</span>{% endif %}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <form method="POST" action="{{ url_for('admin.toggle_announcement', ann_id=ann.id) }}">
+            <button type="submit" class="btn btn-ghost btn-sm" title="{% if ann.is_active %}Dezaktywuj{% else %}Aktywuj{% endif %}">
+              {% if ann.is_active %}🙈{% else %}👁{% endif %}
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('admin.delete_announcement', ann_id=ann.id) }}" onsubmit="return confirm('Usunąć to ogłoszenie?')">
+            <button type="submit" class="btn btn-ghost btn-sm" title="Usuń" style="color:var(--danger);">🗑</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="icon">🔕</div>
+      Brak ogłoszeń. Dodaj pierwsze powyżej.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Użytkownicy -->
+<div class="card">
+  <div class="card-header"><h3>👥 Użytkownicy</h3></div>
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Użytkownik</th>
+            <th>Email</th>
+            <th>Rola</th>
+            <th>Dołączył</th>
+            <th>Zmiana roli</th>
+            <th>Reset hasła</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="avatar" style="background:{{ user.avatar_color }};width:30px;height:30px;font-size:.72rem;">{{ user.initials }}</div>
+                <div>
+                  <div style="font-weight:600;">{{ user.name }}</div>
+                  <div style="font-size:.76rem;color:var(--text-muted);">@{{ user.username }}</div>
+                </div>
+              </div>
+            </td>
+            <td style="color:var(--text-muted);">{{ user.email }}</td>
+            <td>
+              <span class="badge {% if user.is_admin %}badge-primary{% else %}badge-muted{% endif %}">
+                {{ 'admin' if user.is_admin else 'user' }}
+              </span>
+            </td>
+            <td style="color:var(--text-muted);white-space:nowrap;">{{ user.created_at.strftime('%d.%m.%Y') }}</td>
+            <td>
+              {% if user.id != current_user.id %}
+              <form method="POST" action="{{ url_for('admin.change_user_role', user_id=user.id) }}">
+                <select name="role" class="form-control" style="padding:4px 8px;font-size:.78rem;width:auto;" onchange="this.form.submit()">
+                  <option value="user" {% if not user.is_admin %}selected{% endif %}>Użytkownik</option>
+                  <option value="admin" {% if user.is_admin %}selected{% endif %}>Administrator</option>
+                </select>
+              </form>
+              {% else %}
+              <span style="font-size:.76rem;color:var(--text-muted);">(Ty)</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="POST" action="{{ url_for('admin.reset_password', user_id=user.id) }}"
+                    style="display:flex;gap:6px;align-items:center;"
+                    onsubmit="return confirm('Zresetować hasło użytkownika {{ user.username }}? Jeśli pole zostanie puste, wygenerowane zostanie losowe hasło.');">
+                <input type="text" name="new_password" class="form-control" placeholder="Nowe hasło (opcjonalnie)"
+                       style="padding:4px 8px;font-size:.78rem;width:170px;">
+                <button type="submit" class="btn btn-outline btn-sm" title="Resetuj hasło">🔑 Resetuj</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

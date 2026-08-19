@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }} · Planowiec{% endblock %}
+{% block page_title %}{{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><h3>Informacje o grupie</h3></div>
+    <div class="card-body">
+      {% if group.description %}<p style="margin-bottom:14px; color:var(--text-muted);">{{ group.description }}</p>{% endif %}
+
+      {% if is_admin %}
+        <div class="form-label">Kod dołączania — udostępnij go innym</div>
+        <div class="code-display">{{ group.code }}</div>
+      {% endif %}
+
+      <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+        <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.group_calendar', group_id=group.id) }}">Otwórz plan grupy</a>
+        {% if is_admin %}
+          <form method="POST" action="{{ url_for('groups.delete', group_id=group.id) }}" onsubmit="return confirm('Usunąć grupę na stałe? Tej operacji nie można cofnąć.');">
+            <button class="btn btn-danger btn-sm" type="submit">Usuń grupę</button>
+          </form>
+        {% else %}
+          <form method="POST" action="{{ url_for('groups.leave', group_id=group.id) }}" onsubmit="return confirm('Opuścić tę grupę?');">
+            <button class="btn btn-outline btn-sm" type="submit">Opuść grupę</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Członkowie ({{ members|length }})</h3></div>
+    <div class="card-body">
+      {% for m in members %}
+        <div class="list-item">
+          <div class="avatar" style="background:{{ m.user.avatar_color }}; width:34px; height:34px; font-size:.75rem;">{{ m.user.initials }}</div>
+          <div class="list-item-info">
+            <div class="list-item-name">{{ m.user.name }}</div>
+            <div class="list-item-sub">@{{ m.user.username }}</div>
+          </div>
+          {% if m.is_admin %}<span class="badge badge-primary">Admin</span>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Polityka prywatności · Planowiec{% endblock %}
+{% block page_title %}Polityka prywatności{% endblock %}
+
+{% block content %}
+{% include "_privacy_body.html" %}
+{% endblock %}
+
+{% block guest_content %}
+<div style="max-width:820px;margin:40px auto;padding:0 20px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+    <a href="{{ url_for('auth.login') }}" style="color:var(--primary);font-weight:700;text-decoration:none;">← Planowiec</a>
+  </div>
+  {% include "_privacy_body.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Dołącz do grupy' if join_mode else 'Nowa grupa' }} · Planowiec{% endblock %}
+{% block page_title %}{{ 'Dołącz do grupy' if join_mode else 'Nowa grupa' }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:480px;">
+  <div class="card-body">
+
+    <div class="tabs">
+      <a class="tab {% if not join_mode %}active{% endif %}" href="{{ url_for('groups.create') }}">Utwórz grupę</a>
+      <a class="tab {% if join_mode %}active{% endif %}" href="{{ url_for('groups.join') }}">Dołącz kodem</a>
+    </div>
+
+    {% if join_mode %}
+      <form method="POST" action="{{ url_for('groups.join') }}">
+        <div class="form-group">
+          <label class="form-label" for="code">Kod dołączenia</label>
+          <input class="form-control" type="text" id="code" name="code" placeholder="PLAN-XXXX-XXXX-XXXX" required style="text-transform:uppercase; font-family:'Courier New', monospace;">
+          <div class="form-hint">Kod otrzymasz od administratora grupy.</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Dołącz do grupy</button>
+      </form>
+    {% else %}
+      <form method="POST" action="{{ url_for('groups.create') }}">
+        <div class="form-group">
+          <label class="form-label" for="name">Nazwa grupy</label>
+          <input class="form-control" type="text" id="name" name="name" required maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="description">Opis (opcjonalnie)</label>
+          <textarea class="form-control" id="description" name="description" maxlength="255"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Utwórz grupę</button>
+      </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

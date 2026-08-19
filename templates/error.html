@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Błąd {{ code }} · Planowiec{% endblock %}
+{% macro body() %}
+  <div class="error-wrapper">
+    <div class="error-code">{{ code }}</div>
+    <p>{{ message }}</p>
+    <a class="btn btn-primary" href="{{ request.script_root or '/' }}/">Wróć do strony głównej</a>
+  </div>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block guest_content %}{{ body() }}{% endblock %}

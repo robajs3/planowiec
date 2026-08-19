@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Rejestracja · Planowiec{% endblock %}
+{% block guest_content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-icon">🗓️</span> Planowiec
+    </div>
+    <form method="POST" action="{{ url_for('auth.register') }}">
+      <div class="form-group">
+        <label class="form-label" for="username">Nazwa użytkownika</label>
+        <input class="form-control" type="text" id="username" name="username" required autofocus
+               value="{{ request.form.get('username', '') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="display_name">Wyświetlana nazwa (opcjonalnie)</label>
+        <input class="form-control" type="text" id="display_name" name="display_name"
+               value="{{ request.form.get('display_name', '') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="email">E-mail</label>
+        <input class="form-control" type="email" id="email" name="email" required
+               value="{{ request.form.get('email', '') }}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="password">Hasło</label>
+          <input class="form-control" type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password2">Powtórz hasło</label>
+          <input class="form-control" type="password" id="password2" name="password2" required>
+        </div>
+      </div>
+      <div class="form-hint" style="margin-bottom:16px;">Hasło musi mieć co najmniej 8 znaków.</div>
+      <button type="submit" class="btn btn-primary btn-block">Utwórz konto</button>
+    </form>
+    <div class="auth-footer">
+      Masz już konto? <a href="{{ url_for('auth.login') }}">Zaloguj się</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

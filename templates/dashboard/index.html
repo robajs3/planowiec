@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Planowiec{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div id="calendar-app" data-context="{{ context }}" data-context-id="{{ context_id }}" data-can-edit="{{ 'true' if can_edit else 'false' }}">
+
+  {% if announcements %}
+  <div style="margin-bottom:18px;">
+    {% for ann in announcements %}
+    {% set icons = {'info': 'ℹ️', 'warning': '⚠️', 'danger': '🚨', 'success': '✅'} %}
+    <div class="announcement announcement-{{ ann.type }}">
+      <span class="icon">{{ icons.get(ann.type, 'ℹ️') }}</span>
+      <div>
+        <div class="title">{{ ann.title }}</div>
+        <div class="body">{{ ann.content }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if accessible_friends or user_groups %}
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-body" style="padding:14px 20px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span style="font-size:.8rem; font-weight:700; color:var(--text-muted);">Przełącz widok:</span>
+        <a class="chip badge-primary" style="{% if context == 'own' %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.index') }}">Mój plan</a>
+        {% for f in accessible_friends %}
+          <a class="chip" style="{% if context == 'friend' and context_id == f.id %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.friend_calendar', user_id=f.id) }}">👁 {{ f.name }}</a>
+        {% endfor %}
+        {% for g in user_groups %}
+          <a class="chip" style="{% if context == 'group' and context_id == g.id %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.group_calendar', group_id=g.id) }}">🧩 {{ g.name }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not can_edit %}
+  <div class="readonly-banner">👁 Podgląd tylko do odczytu — nie możesz edytować tego planu.</div>
+  {% endif %}
+
+  <div class="type-filters" id="type-filters"></div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="calendar-toolbar">
+        <div class="calendar-nav">
+          <button class="btn btn-outline btn-icon" id="prev-month">‹</button>
+          <button class="btn btn-outline btn-sm" id="today-btn">Dziś</button>
+          <button class="btn btn-outline btn-icon" id="next-month">›</button>
+        </div>
+        <div class="calendar-title" id="calendar-title">—</div>
+        <div class="calendar-actions">
+          {% if can_edit %}
+          <button class="btn btn-primary btn-sm" id="add-activity-btn">+ Dodaj aktywność</button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: aktywności danego dnia -->
+<div class="modal-backdrop" id="day-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="day-modal-title">Dzień</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body" id="day-modal-list"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" id="day-modal-add">+ Dodaj aktywność</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: dodawanie / edycja / podgląd aktywności -->
+<div class="modal-backdrop" id="activity-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="activity-modal-title">Aktywność</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <form id="activity-form">
+      <div class="modal-body">
+        <div class="readonly-banner" id="activity-readonly-banner" style="display:none;">👁 Tylko podgląd</div>
+        <div class="form-group">
+          <label class="form-label" for="activity-title">Tytuł</label>
+          <input class="form-control" type="text" id="activity-title" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="activity-type">Typ aktywności</label>
+          <select class="form-control" id="activity-type"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="activity-start">Początek</label>
+            <input class="form-control" type="datetime-local" id="activity-start" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="activity-end">Koniec</label>
+            <input class="form-control" type="datetime-local" id="activity-end" required>
+          </div>
+        </div>
+        <div class="form-group checkbox-row">
+          <input type="checkbox" id="activity-all-day">
+          <label for="activity-all-day" style="font-size:.85rem;">Cały dzień</label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="activity-location">Lokalizacja</label>
+          <input class="form-control" type="text" id="activity-location">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="activity-description">Opis</label>
+          <textarea class="form-control" id="activity-description"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger btn-sm" id="activity-delete" style="display:none; margin-right:auto;">Usuń</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Zamknij</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="activity-save">Zapisz</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: nowy typ aktywności -->
+<div class="modal-backdrop" id="type-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="type-modal-title">Nowy typ aktywności</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <form id="type-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="type-name">Nazwa</label>
+          <input class="form-control" type="text" id="type-name" required maxlength="60">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="type-color">Kolor</label>
+          <input class="form-control" type="color" id="type-color" value="#2563eb" style="height:42px; padding:4px;">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Anuluj</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="type-save">Dodaj typ</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+{% endblock %}

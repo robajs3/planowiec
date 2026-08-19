@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Znajomi · Planowiec{% endblock %}
+{% block page_title %}Znajomi{% endblock %}
+
+{% block content %}
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body">
+    <form class="search-bar" method="GET" action="{{ url_for('friends.index') }}">
+      <input class="form-control" type="text" name="q" placeholder="Szukaj po nazwie użytkownika lub e-mailu…" value="{{ query }}">
+      <button class="btn btn-primary" type="submit">Szukaj</button>
+    </form>
+
+    {% if query %}
+      {% if results %}
+        {% for row in results %}
+          {% set user = row.user %}
+          {% set rel = row.relationship %}
+          <div class="list-item">
+            <div class="avatar" style="background:{{ user.avatar_color }}; width:38px; height:38px;">{{ user.initials }}</div>
+            <div class="list-item-info">
+              <div class="list-item-name">{{ user.name }}</div>
+              <div class="list-item-sub">@{{ user.username }}</div>
+            </div>
+            <div class="list-item-actions">
+              {% if not rel %}
+                <form method="POST" action="{{ url_for('friends.send_request', user_id=user.id) }}">
+                  <button class="btn btn-primary btn-sm" type="submit">+ Dodaj</button>
+                </form>
+              {% elif rel.status == 'pending' and rel.requester_id == current_user.id %}
+                <span class="badge badge-muted">Zaproszenie wysłane</span>
+              {% elif rel.status == 'pending' %}
+                <span class="badge badge-muted">Oczekuje na Twoją odpowiedź</span>
+              {% elif rel.status == 'accepted' %}
+                <span class="badge badge-success">Znajomi</span>
+              {% else %}
+                <form method="POST" action="{{ url_for('friends.send_request', user_id=user.id) }}">
+                  <button class="btn btn-outline btn-sm" type="submit">Zaproś ponownie</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state"><div class="icon">🔍</div>Brak wyników dla „{{ query }}”.</div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+
+  {% if incoming %}
+  <div class="card">
+    <div class="card-header"><h3>Zaproszenia do Ciebie</h3></div>
+    <div class="card-body">
+      {% for req in incoming %}
+        <div class="list-item">
+          <div class="avatar" style="background:{{ req.requester.avatar_color }}; width:34px; height:34px; font-size:.75rem;">{{ req.requester.initials }}</div>
+          <div class="list-item-info">
+            <div class="list-item-name">{{ req.requester.name }}</div>
+            <div class="list-item-sub">@{{ req.requester.username }}</div>
+          </div>
+          <div class="list-item-actions">
+            <form method="POST" action="{{ url_for('friends.accept_request', friendship_id=req.id) }}">
+              <button class="btn btn-success btn-sm" type="submit">Akceptuj</button>
+            </form>
+            <form method="POST" action="{{ url_for('friends.decline_request', friendship_id=req.id) }}">
+              <button class="btn btn-outline btn-sm" type="submit">Odrzuć</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if outgoing %}
+  <div class="card">
+    <div class="card-header"><h3>Wysłane zaproszenia</h3></div>
+    <div class="card-body">
+      {% for req in outgoing %}
+        <div class="list-item">
+          <div class="avatar" style="background:{{ req.addressee.avatar_color }}; width:34px; height:34px; font-size:.75rem;">{{ req.addressee.initials }}</div>
+          <div class="list-item-info">
+            <div class="list-item-name">{{ req.addressee.name }}</div>
+            <div class="list-item-sub">Oczekuje na odpowiedź</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <div class="card-header"><h3>Twoi znajomi</h3></div>
+  <div class="card-body">
+    {% if friends %}
+      {% for friend, friendship_id in friends %}
+        <div class="list-item">
+          <div class="avatar" style="background:{{ friend.avatar_color }}; width:38px; height:38px;">{{ friend.initials }}</div>
+          <div class="list-item-info">
+            <div class="list-item-name">{{ friend.name }}</div>
+            <div class="list-item-sub">@{{ friend.username }}</div>
+          </div>
+          <div class="list-item-actions">
+            {% if friend.id in granted_to %}
+              <form method="POST" action="{{ url_for('friends.revoke_access', viewer_id=friend.id) }}">
+                <button class="btn btn-outline btn-sm" type="submit">Odbierz dostęp do planu</button>
+              </form>
+            {% else %}
+              <form method="POST" action="{{ url_for('friends.grant_access', viewer_id=friend.id) }}">
+                <button class="btn btn-secondary btn-sm" type="submit">Udostępnij plan</button>
+              </form>
+            {% endif %}
+            <form method="POST" action="{{ url_for('friends.remove_friend', friendship_id=friendship_id) }}" onsubmit="return confirm('Na pewno usunąć znajomego?');">
+              <button class="btn btn-outline btn-sm" type="submit">Usuń</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state"><div class="icon">👥</div>Nie masz jeszcze żadnych znajomych. Wyszukaj kogoś powyżej!</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if accessible_from %}
+<div class="card" style="margin-top:20px;">
+  <div class="card-header"><h3>Plany udostępnione Tobie</h3></div>
+  <div class="card-body">
+    {% for pa in accessible_from %}
+      <div class="list-item">
+        <div class="avatar" style="background:{{ pa.owner.avatar_color }}; width:34px; height:34px; font-size:.75rem;">{{ pa.owner.initials }}</div>
+        <div class="list-item-info">
+          <div class="list-item-name">{{ pa.owner.name }}</div>
+          <div class="list-item-sub">Dostęp tylko do odczytu</div>
+        </div>
+        <div class="list-item-actions">
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.friend_calendar', user_id=pa.owner.id) }}">Zobacz plan</a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

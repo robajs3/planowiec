@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Grupy · Planowiec{% endblock %}
+{% block page_title %}Grupy{% endblock %}
+
+{% block content %}
+<div class="card-header" style="background:none; border:none; padding:0 0 16px;">
+  <div></div>
+  <div class="calendar-actions">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('groups.join') }}">Dołącz kodem</a>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('groups.create') }}">+ Nowa grupa</a>
+  </div>
+</div>
+
+{% if groups %}
+<div class="grid-2">
+  {% for group in groups %}
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div>
+            <div style="font-weight:700; font-size:1rem;">{{ group.name }}</div>
+            {% if group.description %}<div class="list-item-sub">{{ group.description }}</div>{% endif %}
+          </div>
+          {% if group.admin_id == current_user_id %}
+            <span class="badge badge-primary">Admin</span>
+          {% endif %}
+        </div>
+        <div class="list-item-sub" style="margin-top:8px;">{{ group.member_count }} członków</div>
+        <div style="margin-top:14px; display:flex; gap:8px;">
+          <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.group_calendar', group_id=group.id) }}">Plan grupy</a>
+          <a class="btn btn-outline btn-sm" href="{{ url_for('groups.detail', group_id=group.id) }}">Szczegóły</a>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="card-body">
+  <div class="empty-state">
+    <div class="icon">🧩</div>
+    Nie należysz jeszcze do żadnej grupy.<br>
+    Utwórz nową grupę lub dołącz do istniejącej za pomocą kodu.
+  </div>
+</div></div>
+{% endif %}
+{% endblock %}

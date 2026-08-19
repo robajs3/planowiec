@@ -1,0 +1,56 @@
+from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask_login import login_user, logout_user, login_required, current_user
+
+from services.auth_service import AuthService
+
+auth_bp = Blueprint("auth", __name__)
+
+
+@auth_bp.route("/auth/register", methods=["GET", "POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        display_name = request.form.get("display_name", "").strip()
+        password = request.form.get("password", "")
+        password2 = request.form.get("password2", "")
+
+        error = AuthService.validate_registration(username, email, password, password2)
+        if error:
+            flash(error, "danger")
+        else:
+            user = AuthService.register_user(username, email, password, display_name)
+            login_user(user)
+            flash("Witaj w Planowcu! Twoje konto zostało utworzone.", "success")
+            return redirect(url_for("dashboard.index"))
+
+    return render_template("auth/register.html")
+
+
+@auth_bp.route("/auth/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    if request.method == "POST":
+        identifier = request.form.get("identifier", "").strip()
+        password = request.form.get("password", "")
+        user = AuthService.authenticate(identifier, password)
+        if user:
+            login_user(user, remember=bool(request.form.get("remember")))
+            flash(f"Witaj z powrotem, {user.name}!", "success")
+            return redirect(request.args.get("next") or url_for("dashboard.index"))
+        flash("Nieprawidłowy login lub hasło.", "danger")
+
+    return render_template("auth/login.html")
+
+
+@auth_bp.route("/auth/logout")
+@login_required
+def logout():
+    logout_user()
+    flash("Wylogowano pomyślnie.", "info")
+    return redirect(url_for("auth.login"))

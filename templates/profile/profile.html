@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Profil · Planowiec{% endblock %}
+{% block page_title %}Profil{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+
+  <div class="card">
+    <div class="card-header"><h3>Dane profilu</h3></div>
+    <div class="card-body">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+        <div class="avatar" style="background:{{ current_user.avatar_color }}; width:56px; height:56px; font-size:1.1rem;">{{ current_user.initials }}</div>
+        <div>
+          <div style="font-weight:700;">{{ current_user.name }}</div>
+          <div class="list-item-sub">@{{ current_user.username }} · {{ current_user.email }}</div>
+        </div>
+      </div>
+
+      <form method="POST" action="{{ url_for('profile.update') }}">
+        <div class="form-group">
+          <label class="form-label" for="display_name">Wyświetlana nazwa</label>
+          <input class="form-control" type="text" id="display_name" name="display_name" value="{{ current_user.display_name or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kolor awatara</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            {% for color in palette %}
+              <label style="cursor:pointer;">
+                <input type="radio" name="avatar_color" value="{{ color }}" {% if current_user.avatar_color == color %}checked{% endif %} style="display:none;" onchange="this.closest('form').requestSubmit ? null : null;">
+                <span style="display:inline-block; width:30px; height:30px; border-radius:50%; background:{{ color }}; border:3px solid {{ 'var(--text)' if current_user.avatar_color == color else 'transparent' }};" onclick="this.previousElementSibling.checked=true;"></span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Zmiana hasła</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('profile.change_password') }}">
+        <div class="form-group">
+          <label class="form-label" for="old_password">Obecne hasło</label>
+          <input class="form-control" type="password" id="old_password" name="old_password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="new_password">Nowe hasło</label>
+          <input class="form-control" type="password" id="new_password" name="new_password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="new_password2">Powtórz nowe hasło</label>
+          <input class="form-control" type="password" id="new_password2" name="new_password2" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Zmień hasło</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
