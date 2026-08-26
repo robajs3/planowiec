@@ -10,6 +10,15 @@
   // pod ścieżką inną niż "/" (np. za Tailscale Serve --set-path).
   const API_BASE = (window.APP_URL_PREFIX || "") + "/dashboard/api";
 
+  // Drag & drop (kopiowanie dnia / powtarzającej się aktywności między dniami)
+  // włączamy tylko tam, gdzie mamy jednoznaczny, edytowalny kontekst — czyli
+  // własny plan lub plan grupy, w której mamy rolę admin/editor. W widoku
+  // zagregowanym "Wszystkie plany" (mieszanka źródeł o różnych uprawnieniach)
+  // oraz w podglądzie cudzego planu drag&drop jest wyłączony.
+  const DRAG_ENABLED = CONTEXT === "own" || (CONTEXT === "group" && CAN_EDIT);
+
+  const SOURCE_ICON = { own: "", friend: "👁", group: "🧩" };
+
   const WEEKDAYS = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Niedz"];
   const MONTHS = [
     "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
@@ -23,9 +32,15 @@
   let activities = [];
   let editingActivityId = null;
 
+  // Efektywny kontekst edycji aktualnie otwartej aktywności w modalu — w widoku
+  // "all" różni się on od globalnego CONTEXT/CONTEXT_ID w zależności od tego,
+  // z czyjego planu pochodzi dana aktywność (zob. activity.source).
+  let editCtx = { context: CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT };
+
   const grid = document.getElementById("calendar-grid");
   const titleEl = document.getElementById("calendar-title");
   const filtersEl = document.getElementById("type-filters");
+  const legendEl = document.getElementById("source-legend");
 
   // ---------------------------------------------------------------------
   // API helpers
@@ -48,7 +63,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Ładowanie typów aktywności
+  // Ładowanie typów aktywności / kategorii
   // ---------------------------------------------------------------------
   async function loadTypes() {
     types = await apiGet(`${API_BASE}/types?context=${CONTEXT}&id=${CONTEXT_ID}`);
@@ -57,6 +72,12 @@
     }
     renderFilters();
   }
+
+  // Czy w bieżącym, globalnym kontekście strony wolno zarządzać kategoriami
+  // (dodawać/edytować/usuwać)? Tak w prywatnym planie oraz w planie grupy,
+  // gdy mamy rolę admin/editor. Nie w podglądzie cudzego planu ani w
+  // zagregowanym widoku "Wszystkie plany" (tam kategorie są tylko filtrem).
+  const CAN_MANAGE_TYPES = CONTEXT === "own" || (CONTEXT === "group" && CAN_EDIT);
 
   function renderFilters() {
     filtersEl.innerHTML = "";
@@ -78,13 +99,11 @@
       });
       wrap.appendChild(chip);
 
-      // Edytować może każdy typ (domyślne są globalne, zmiana widoczna dla wszystkich).
-      // Usuwać można tylko własne (niedomyślne) typy.
-      if (CONTEXT === "own") {
+      if (CAN_MANAGE_TYPES) {
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "type-filter-tool";
-        editBtn.title = t.is_default ? "Edytuj typ (domyślny — zmiana widoczna dla wszystkich)" : "Edytuj typ";
+        editBtn.title = t.is_default ? "Edytuj kategorię" : "Edytuj typ";
         editBtn.setAttribute("aria-label", "Edytuj typ " + t.name);
         editBtn.innerHTML = "✎";
         editBtn.addEventListener("click", (e) => {
@@ -93,11 +112,15 @@
         });
         wrap.appendChild(editBtn);
 
-        if (!t.is_default) {
+        // W prywatnym planie nie da się usunąć globalnych domyślnych typów.
+        // W planie grupy admin/editor może usunąć DOWOLNĄ kategorię grupy,
+        // łącznie z tymi domyślnymi (to niezależna kopia tej grupy).
+        const canDeleteThis = CONTEXT === "group" ? true : !t.is_default;
+        if (canDeleteThis) {
           const delBtn = document.createElement("button");
           delBtn.type = "button";
           delBtn.className = "type-filter-tool type-filter-tool-danger";
-          delBtn.title = "Usuń typ";
+          delBtn.title = "Usuń";
           delBtn.setAttribute("aria-label", "Usuń typ " + t.name);
           delBtn.innerHTML = "🗑";
           delBtn.addEventListener("click", (e) => {
@@ -111,14 +134,31 @@
       filtersEl.appendChild(wrap);
     });
 
-    if (CONTEXT === "own") {
+    if (CAN_MANAGE_TYPES) {
       const addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "type-filter add-type-btn";
-      addBtn.innerHTML = "+ Nowy typ";
+      addBtn.innerHTML = CONTEXT === "group" ? "+ Nowa kategoria" : "+ Nowy typ";
       addBtn.addEventListener("click", () => openTypeModal(null));
       filtersEl.appendChild(addBtn);
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Legenda źródeł (tylko widok "Wszystkie plany")
+  // ---------------------------------------------------------------------
+  function renderLegend() {
+    if (!legendEl) return;
+    if (CONTEXT !== "all") {
+      legendEl.style.display = "none";
+      return;
+    }
+    legendEl.style.display = "flex";
+    legendEl.innerHTML = `
+      <span><span class="dot own"></span>Twoje aktywności</span>
+      <span><span class="dot friend"></span>👁 Znajomi</span>
+      <span><span class="dot group"></span>🧩 Grupy</span>
+    `;
   }
 
   // ---------------------------------------------------------------------
@@ -152,6 +192,7 @@
   function renderGrid() {
     const { gridStart } = gridRange();
     titleEl.textContent = `${MONTHS[current.getMonth()]} ${current.getFullYear()}`;
+    renderLegend();
 
     grid.innerHTML = "";
     WEEKDAYS.forEach((d) => {
@@ -182,14 +223,28 @@
       const dayActivities = activities.filter((a) => sameDate(new Date(a.start), dayDate));
       dayActivities.slice(0, 3).forEach((a) => {
         const chip = document.createElement("div");
-        chip.className = "calendar-event-chip";
+        const srcKind = a.source ? a.source.kind : null;
+        chip.className = "calendar-event-chip" + (srcKind ? ` source-${srcKind}` : "");
         chip.style.background = a.type ? a.type.color : "#64748b";
-        chip.textContent = a.title;
-        chip.title = a.title;
+        const icon = srcKind ? SOURCE_ICON[srcKind] : "";
+        chip.textContent = (icon ? icon + " " : "") + a.title;
+        chip.title = a.source ? `${a.title} — ${a.source.label}` : a.title;
         chip.addEventListener("click", (e) => {
           e.stopPropagation();
           openActivityModal(a);
         });
+
+        const chipCanEdit = a.source ? a.source.can_edit : CAN_EDIT;
+        if (DRAG_ENABLED && chipCanEdit) {
+          chip.classList.add("draggable-chip");
+          chip.draggable = true;
+          chip.addEventListener("dragstart", (e) => {
+            e.stopPropagation();
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData("application/json", JSON.stringify({ kind: "activity", id: a.id }));
+          });
+        }
+
         eventsWrap.appendChild(chip);
       });
       if (dayActivities.length > 3) {
@@ -201,6 +256,40 @@
 
       dayCell.appendChild(eventsWrap);
       dayCell.addEventListener("click", () => openDayModal(dayDate, dayActivities));
+
+      // ---- Drag & drop: przeciąganie całego dnia (kopiowanie) ----
+      const dayHasEditableActivities = dayActivities.some((a) => (a.source ? a.source.can_edit : CAN_EDIT));
+      if (DRAG_ENABLED) {
+        dayCell.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          dayCell.classList.add("drag-over");
+        });
+        dayCell.addEventListener("dragleave", () => dayCell.classList.remove("drag-over"));
+        dayCell.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dayCell.classList.remove("drag-over");
+          let payload;
+          try {
+            payload = JSON.parse(e.dataTransfer.getData("application/json"));
+          } catch (err) {
+            return;
+          }
+          handleDrop(payload, dayDate);
+        });
+
+        if (dayHasEditableActivities) {
+          dayCell.classList.add("drag-enabled");
+          dayCell.draggable = true;
+          dayCell.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData("application/json", JSON.stringify({ kind: "day", date: dayDate.toISOString() }));
+            dayCell.classList.add("day-dragging");
+          });
+          dayCell.addEventListener("dragend", () => dayCell.classList.remove("day-dragging"));
+        }
+      }
+
       grid.appendChild(dayCell);
 
       cursor.setDate(cursor.getDate() + 1);
@@ -215,6 +304,63 @@
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // ---------------------------------------------------------------------
+  // Drag & drop: logika kopiowania
+  // ---------------------------------------------------------------------
+  function combineDateTime(targetDate, originalDate) {
+    const d = new Date(targetDate);
+    d.setHours(originalDate.getHours(), originalDate.getMinutes(), originalDate.getSeconds(), 0);
+    return d;
+  }
+
+  function formatLocal(d) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function copyActivity(a, targetDate) {
+    const originalStart = new Date(a.start);
+    const originalEnd = new Date(a.end);
+    if (sameDate(originalStart, targetDate)) return; // bez sensu kopiować na ten sam dzień
+    const durationMs = originalEnd.getTime() - originalStart.getTime();
+    const newStart = combineDateTime(targetDate, originalStart);
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    const payload = {
+      context: CONTEXT,
+      id: CONTEXT_ID,
+      title: a.title,
+      description: a.description,
+      location: a.location,
+      all_day: a.all_day,
+      start: formatLocal(newStart),
+      end: formatLocal(newEnd),
+      activity_type_id: a.type ? a.type.id : null,
+    };
+    await apiSend(`${API_BASE}/activities`, "POST", payload);
+  }
+
+  async function handleDrop(payload, targetDate) {
+    try {
+      if (payload.kind === "activity") {
+        const a = activities.find((x) => x.id === payload.id);
+        if (!a) return;
+        await copyActivity(a, targetDate);
+      } else if (payload.kind === "day") {
+        const sourceDate = new Date(payload.date);
+        if (sameDate(sourceDate, targetDate)) return;
+        const dayActivities = activities.filter((a) => sameDate(new Date(a.start), sourceDate));
+        for (const a of dayActivities) {
+          const chipCanEdit = a.source ? a.source.can_edit : CAN_EDIT;
+          if (chipCanEdit) await copyActivity(a, targetDate);
+        }
+      }
+      await loadActivities();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -263,11 +409,13 @@
           const time = a.all_day
             ? "Cały dzień"
             : `${formatTime(a.start)} – ${formatTime(a.end)}`;
+          const srcIcon = a.source ? SOURCE_ICON[a.source.kind] : "";
+          const srcLabel = a.source ? ` · ${escapeHtml(a.source.label)}` : "";
           item.innerHTML = `
             <span class="type-dot" style="background:${a.type ? a.type.color : "#64748b"}"></span>
             <div class="list-item-info">
-              <div class="list-item-name">${escapeHtml(a.title)}</div>
-              <div class="list-item-sub">${time}${a.location ? " · " + escapeHtml(a.location) : ""}</div>
+              <div class="list-item-name">${srcIcon ? srcIcon + " " : ""}${escapeHtml(a.title)}</div>
+              <div class="list-item-sub">${time}${a.location ? " · " + escapeHtml(a.location) : ""}${srcLabel}</div>
             </div>`;
           item.addEventListener("click", () => openActivityModal(a));
           dayModalList.appendChild(item);
@@ -299,9 +447,15 @@
   const actSaveBtn = document.getElementById("activity-save");
   const actReadonlyBanner = document.getElementById("activity-readonly-banner");
 
-  function populateTypeSelect() {
+  function populateTypeSelect(ctxKind, ctxId) {
     actTypeSelect.innerHTML = "";
-    types.forEach((t) => {
+    // W widoku "Wszystkie plany" typy są zbiorem z wielu źródeł — przy
+    // dodawaniu/edycji pokazujemy tylko te pasujące do faktycznego planu,
+    // do którego trafi aktywność (własny/grupowy), żeby nie mieszać kategorii.
+    const relevant = CONTEXT === "all"
+      ? types.filter((t) => (ctxKind === "group" ? t.group_id === ctxId : !t.group_id))
+      : types;
+    (relevant.length ? relevant : types).forEach((t) => {
       const opt = document.createElement("option");
       opt.value = t.id;
       opt.textContent = t.name;
@@ -310,15 +464,23 @@
   }
 
   function toLocalInput(iso) {
-    const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return formatLocal(new Date(iso));
   }
 
   function openActivityModal(activity, presetDate) {
-    populateTypeSelect();
     editingActivityId = activity ? activity.id : null;
-    const readOnly = !CAN_EDIT;
+
+    if (activity && activity.source) {
+      editCtx = { context: activity.source.kind, id: activity.source.id, canEdit: activity.source.can_edit };
+    } else if (activity) {
+      editCtx = { context: CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT };
+    } else {
+      // Nowa aktywność: w widoku zagregowanym zawsze trafia do własnego planu.
+      editCtx = { context: CONTEXT === "all" ? "own" : CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT };
+    }
+
+    populateTypeSelect(editCtx.context, editCtx.id);
+    const readOnly = !editCtx.canEdit;
 
     actTitle.textContent = activity ? (readOnly ? "Szczegóły aktywności" : "Edytuj aktywność") : "Nowa aktywność";
     actReadonlyBanner.style.display = readOnly ? "flex" : "none";
@@ -338,7 +500,7 @@
     }
     document.getElementById("activity-start").value = toLocalInput(startDate);
     document.getElementById("activity-end").value = toLocalInput(endDate);
-    actTypeSelect.value = activity && activity.type ? activity.type.id : (types[0] ? types[0].id : "");
+    actTypeSelect.value = activity && activity.type ? activity.type.id : (actTypeSelect.options[0] ? actTypeSelect.options[0].value : "");
 
     Array.from(actForm.elements).forEach((el) => {
       if (el.type !== "button" && el.type !== "submit") el.disabled = readOnly;
@@ -355,8 +517,8 @@
   actForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = {
-      context: CONTEXT,
-      id: CONTEXT_ID,
+      context: editCtx.context,
+      id: editCtx.id,
       title: document.getElementById("activity-title").value,
       description: document.getElementById("activity-description").value,
       location: document.getElementById("activity-location").value,
@@ -382,7 +544,7 @@
     if (!editingActivityId) return;
     if (!confirm("Na pewno usunąć tę aktywność?")) return;
     try {
-      await apiSend(`${API_BASE}/activities/${editingActivityId}?context=${CONTEXT}&id=${CONTEXT_ID}`, "DELETE");
+      await apiSend(`${API_BASE}/activities/${editingActivityId}?context=${editCtx.context}&id=${editCtx.id}`, "DELETE");
       closeModal(actModal);
       loadActivities();
     } catch (err) {
@@ -391,7 +553,7 @@
   });
 
   // ---------------------------------------------------------------------
-  // Modal: nowy typ / edycja typu aktywności
+  // Modal: nowy typ / edycja typu aktywności (lub kategorii grupy)
   // ---------------------------------------------------------------------
   const typeModal = document.getElementById("type-modal");
   const typeForm = document.getElementById("type-form");
@@ -402,8 +564,9 @@
   function openTypeModal(type) {
     typeForm.reset();
     editingTypeId = type ? type.id : null;
-    typeModalTitle.textContent = type ? "Edytuj typ aktywności" : "Nowy typ aktywności";
-    typeSaveBtn.textContent = type ? "Zapisz zmiany" : "Dodaj typ";
+    const label = CONTEXT === "group" ? "kategorię" : "typ aktywności";
+    typeModalTitle.textContent = type ? `Edytuj ${label}` : `Nowa ${label}`;
+    typeSaveBtn.textContent = type ? "Zapisz zmiany" : "Dodaj";
     document.getElementById("type-name").value = type ? type.name : "";
     document.getElementById("type-color").value = type ? type.color : "#2563eb";
     typeModal.classList.add("open");
@@ -412,6 +575,8 @@
   typeForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = {
+      context: CONTEXT,
+      id: CONTEXT_ID,
       name: document.getElementById("type-name").value,
       color: document.getElementById("type-color").value,
     };
@@ -430,9 +595,9 @@
   });
 
   async function deleteType(type) {
-    if (!confirm(`Na pewno usunąć typ „${type.name}”?`)) return;
+    if (!confirm(`Na pewno usunąć „${type.name}”?`)) return;
     try {
-      await apiSend(`${API_BASE}/types/${type.id}`, "DELETE");
+      await apiSend(`${API_BASE}/types/${type.id}?context=${CONTEXT}&id=${CONTEXT_ID}`, "DELETE");
       activeTypeIds.delete(type.id);
       await loadTypes();
       loadActivities();

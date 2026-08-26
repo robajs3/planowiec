@@ -24,6 +24,12 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Gdy True — widok "główny plan" (dashboard.index) domyślnie agreguje
+    # własne aktywności razem z planami znajomych (którym dano dostęp)
+    # i grup, do których użytkownik należy. Domyślnie wyłączone: widoczny
+    # jest wtedy tylko własny, prywatny plan (zachowanie sprzed tej opcji).
+    show_all_plans = db.Column(db.Boolean, default=False, nullable=False)
+
     activities = db.relationship(
         "Activity", back_populates="owner", cascade="all, delete-orphan",
         foreign_keys="Activity.owner_id",

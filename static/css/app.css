@@ -209,6 +209,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .badge-muted { background: var(--bg); color: var(--text-muted); }
 .badge-warning { background: #fef3c7; color: var(--warning); }
 .badge-danger { background: #fee2e2; color: var(--danger); }
+.badge-info { background: rgba(2,132,199,.14); color: var(--info); }
 
 /* ===== TABLE ===== */
 .table-wrap { overflow-x: auto; }
@@ -299,6 +300,48 @@ table.data-table tr:last-child td { border-bottom: none; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .calendar-event-more { font-size: .68rem; color: var(--text-muted); font-weight: 600; padding-left: 4px; }
+
+/* ===== ŹRÓDŁO AKTYWNOŚCI (widok "Wszystkie plany") ===== */
+.calendar-event-chip.source-friend { border: 1px dashed rgba(255,255,255,.85); }
+.calendar-event-chip.source-group { border: 1px solid rgba(255,255,255,.85); }
+.calendar-event-chip .source-icon { margin-right: 3px; opacity: .9; }
+.source-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .74rem; color: var(--text-muted); margin-bottom: 12px; }
+.source-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.source-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.source-legend .dot.own { background: var(--primary); }
+.source-legend .dot.friend { border: 1px dashed var(--text-muted); background: transparent; }
+.source-legend .dot.group { border: 1px solid var(--text-muted); background: transparent; }
+
+/* ===== DRAG & DROP ===== */
+.calendar-day.drag-enabled { cursor: grab; }
+.calendar-day.drag-over { border-color: var(--primary); background: var(--primary-light); box-shadow: 0 0 0 2px var(--primary) inset; }
+.calendar-event-chip.draggable-chip { cursor: grab; }
+.calendar-event-chip.draggable-chip:active { cursor: grabbing; }
+.calendar-day.day-dragging { opacity: .5; }
+
+/* ===== PRZEŁĄCZNIK "WSZYSTKIE PLANY" ===== */
+.switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute; cursor: pointer; inset: 0; background: var(--border);
+  transition: var(--transition); border-radius: 999px;
+}
+.switch .slider::before {
+  position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+  background: #fff; transition: var(--transition); border-radius: 50%;
+}
+.switch input:checked + .slider { background: var(--primary); }
+.switch input:checked + .slider::before { transform: translateX(16px); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-row .settings-label { font-size: .88rem; font-weight: 600; }
+.settings-row .settings-hint { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
+
+/* Znacznik w menu bocznym, gdy widok "Wszystkie plany" jest domyślnie włączony */
+.nav-item .nav-badge {
+  margin-left: auto; font-size: .6rem; font-weight: 800; letter-spacing: .04em;
+  background: var(--primary); color: #fff; border-radius: 999px; padding: 2px 6px;
+}
+.nav-item.active .nav-badge { background: rgba(255,255,255,.25); }
 
 /* ===== MODAL ===== */
 .modal-backdrop {

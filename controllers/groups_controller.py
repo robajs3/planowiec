@@ -1,8 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+
 from flask_login import login_required, current_user
 
-from models import Group
+from models import Group, ALL_ROLES, ROLE_LABELS
 from services.group_service import GroupService
+from services.activity_service import ActivityService
 
 groups_bp = Blueprint("groups", __name__)
 
@@ -46,11 +48,22 @@ def join():
 @login_required
 def detail(group_id):
     group = Group.query.get_or_404(group_id)
-    if not GroupService.is_member(current_user.id, group.id):
+    membership = GroupService.get_membership(current_user.id, group.id)
+    if not membership:
         abort(403)
     members = GroupService.list_members(group.id)
-    is_admin = GroupService.is_admin(current_user.id, group.id)
-    return render_template("groups/detail.html", group=group, members=members, is_admin=is_admin)
+    categories = ActivityService.get_types_for_group(group.id)
+    return render_template(
+        "groups/detail.html",
+        group=group,
+        members=members,
+        categories=categories,
+        membership=membership,
+        is_admin=membership.can_manage_roles,
+        can_manage_categories=membership.can_manage_categories,
+        all_roles=ALL_ROLES,
+        role_labels=ROLE_LABELS,
+    )
 
 
 @groups_bp.route("/groups/<int:group_id>/leave", methods=["POST"])
@@ -67,3 +80,53 @@ def delete(group_id):
     ok, error = GroupService.delete_group(current_user.id, group_id)
     flash("Grupa usunięta." if ok else (error or "Błąd."), "info" if ok else "danger")
     return redirect(url_for("groups.index"))
+
+
+# ---------------------------------------------------------------------------
+# Zarządzanie rolami / członkami (tylko admin)
+# ---------------------------------------------------------------------------
+
+@groups_bp.route("/groups/<int:group_id>/members/<int:user_id>/role", methods=["POST"])
+@login_required
+def set_role(group_id, user_id):
+    new_role = request.form.get("role", "")
+    ok, error = GroupService.set_member_role(current_user.id, group_id, user_id, new_role)
+    flash("Zaktualizowano rolę." if ok else (error or "Błąd."), "success" if ok else "danger")
+    return redirect(url_for("groups.detail", group_id=group_id))
+
+
+@groups_bp.route("/groups/<int:group_id>/members/<int:user_id>/remove", methods=["POST"])
+@login_required
+def remove_member(group_id, user_id):
+    ok, error = GroupService.remove_member(current_user.id, group_id, user_id)
+    flash("Usunięto członka z grupy." if ok else (error or "Błąd."), "info" if ok else "danger")
+    return redirect(url_for("groups.detail", group_id=group_id))
+
+
+# ---------------------------------------------------------------------------
+# Zarządzanie kategoriami aktywności grupy (admin i editor)
+# ---------------------------------------------------------------------------
+
+@groups_bp.route("/groups/<int:group_id>/categories/create", methods=["POST"])
+@login_required
+def create_category(group_id):
+    if not GroupService.can_manage_categories(current_user.id, group_id):
+        abort(403)
+    name = request.form.get("name", "")
+    color = request.form.get("color", "#4f46e5")
+    _, error = ActivityService.create_group_type(group_id, name, color)
+    if error:
+        flash(error, "danger")
+    else:
+        flash("Dodano kategorię.", "success")
+    return redirect(url_for("groups.detail", group_id=group_id))
+
+
+@groups_bp.route("/groups/<int:group_id>/categories/<int:type_id>/delete", methods=["POST"])
+@login_required
+def delete_category(group_id, type_id):
+    if not GroupService.can_manage_categories(current_user.id, group_id):
+        abort(403)
+    ok, error = ActivityService.delete_group_type(group_id, type_id)
+    flash("Usunięto kategorię." if ok else (error or "Błąd."), "info" if ok else "danger")
+    return redirect(url_for("groups.detail", group_id=group_id))

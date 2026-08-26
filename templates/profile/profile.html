@@ -38,6 +38,29 @@
   </div>
 
   <div class="card">
+    <div class="card-header"><h3>Widok główny</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('dashboard.toggle_all_plans') }}">
+        <input type="hidden" name="next" value="{{ url_for('profile.index') }}">
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">🗂️ Wszystkie plany w widoku głównym</div>
+            <div class="settings-hint">
+              Gdy włączone, "Mój plan" w menu domyślnie pokazuje razem Twoje
+              aktywności, plany znajomych (którym dałeś dostęp) i plany grup,
+              do których należysz — oznaczone w kalendarzu i menu.
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" onchange="this.form.requestSubmit()" {% if current_user.show_all_plans %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-header"><h3>Zmiana hasła</h3></div>
     <div class="card-body">
       <form method="POST" action="{{ url_for('profile.change_password') }}">

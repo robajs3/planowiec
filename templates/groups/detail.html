@@ -14,6 +14,10 @@
         <div class="code-display">{{ group.code }}</div>
       {% endif %}
 
+      <div style="margin-top:14px;">
+        <span class="badge badge-primary">Twoja rola: {{ membership.role_label }}</span>
+      </div>
+
       <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
         <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.group_calendar', group_id=group.id) }}">Otwórz plan grupy</a>
         {% if is_admin %}
@@ -39,10 +43,65 @@
             <div class="list-item-name">{{ m.user.name }}</div>
             <div class="list-item-sub">@{{ m.user.username }}</div>
           </div>
-          {% if m.is_admin %}<span class="badge badge-primary">Admin</span>{% endif %}
+
+          {% if is_admin and m.user_id != current_user.id %}
+            <form method="POST" action="{{ url_for('groups.set_role', group_id=group.id, user_id=m.user_id) }}" style="display:flex; align-items:center; gap:6px;">
+              <select name="role" class="form-control" style="width:auto; padding:4px 8px; font-size:.78rem;" onchange="this.form.submit()">
+                {% for r in all_roles %}
+                  <option value="{{ r }}" {% if m.role == r %}selected{% endif %}>{{ role_labels[r] }}</option>
+                {% endfor %}
+              </select>
+            </form>
+            <form method="POST" action="{{ url_for('groups.remove_member', group_id=group.id, user_id=m.user_id) }}" onsubmit="return confirm('Usunąć {{ m.user.name }} z grupy?');">
+              <button class="type-filter-tool type-filter-tool-danger" type="submit" title="Usuń z grupy" aria-label="Usuń {{ m.user.name }} z grupy">🗑</button>
+            </form>
+          {% else %}
+            {% set badge_class = 'badge-primary' if m.role == 'admin' else ('badge-info' if m.role == 'editor' else '') %}
+            <span class="badge {{ badge_class }}">{{ m.role_label }}</span>
+          {% endif %}
         </div>
       {% endfor %}
     </div>
   </div>
+
+  {% if can_manage_categories %}
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header"><h3>Kategorie aktywności grupy</h3></div>
+    <div class="card-body">
+      <p style="color:var(--text-muted); font-size:.85rem; margin-bottom:14px;">
+        Te kategorie dotyczą wyłącznie planu tej grupy. Jako admin/editor możesz
+        dodawać własne oraz usuwać dowolne — również te domyślne (Praca, Nauka,
+        Sport, Spotkanie, Odpoczynek, Inne). Nie wpływa to na inne grupy ani na
+        Twój prywatny plan.
+      </p>
+
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;">
+        {% for c in categories %}
+          <form method="POST" action="{{ url_for('groups.delete_category', group_id=group.id, type_id=c.id) }}"
+                onsubmit="return confirm('Usunąć kategorię „{{ c.name }}”?');"
+                style="display:flex; align-items:center; gap:4px; background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:4px 6px 4px 12px;">
+            <span class="type-dot" style="background:{{ c.color }};"></span>
+            <span style="font-size:.85rem;">{{ c.name }}</span>
+            <button type="submit" class="type-filter-tool type-filter-tool-danger" title="Usuń kategorię" aria-label="Usuń kategorię {{ c.name }}">🗑</button>
+          </form>
+        {% else %}
+          <span style="color:var(--text-muted); font-size:.85rem;">Brak kategorii — dodaj pierwszą poniżej.</span>
+        {% endfor %}
+      </div>
+
+      <form method="POST" action="{{ url_for('groups.create_category', group_id=group.id) }}" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="cat-name">Nowa kategoria</label>
+          <input class="form-control" type="text" id="cat-name" name="name" maxlength="60" required placeholder="np. Wyjazdy">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" for="cat-color">Kolor</label>
+          <input class="form-control" type="color" id="cat-color" name="color" value="#2563eb" style="height:42px; width:70px; padding:4px;">
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">+ Dodaj kategorię</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -35,7 +35,12 @@
       </div>
       <nav class="sidebar-nav">
         <a class="nav-item {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
-          <span class="nav-icon">📅</span> Mój plan
+          {% if current_user.show_all_plans %}
+            <span class="nav-icon">🗂️</span> Wszystkie plany
+            <span class="nav-badge" title="Widok główny agreguje Twój plan, znajomych i grup">ALL</span>
+          {% else %}
+            <span class="nav-icon">📅</span> Mój plan
+          {% endif %}
         </a>
         <a class="nav-item {% if request.blueprint == 'friends' %}active{% endif %}" href="{{ url_for('friends.index') }}">
           <span class="nav-icon">👥</span> Znajomi

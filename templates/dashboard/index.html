@@ -25,23 +25,40 @@
     <div class="card-body" style="padding:14px 20px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <span style="font-size:.8rem; font-weight:700; color:var(--text-muted);">Przełącz widok:</span>
-        <a class="chip badge-primary" style="{% if context == 'own' %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.index') }}">Mój plan</a>
+        <a class="chip badge-primary" style="{% if context in ('own', 'all') %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.index') }}">Mój plan</a>
         {% for f in accessible_friends %}
           <a class="chip" style="{% if context == 'friend' and context_id == f.id %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.friend_calendar', user_id=f.id) }}">👁 {{ f.name }}</a>
         {% endfor %}
         {% for g in user_groups %}
           <a class="chip" style="{% if context == 'group' and context_id == g.id %}background:var(--primary); color:#fff;{% else %}background:var(--bg); color:var(--text);{% endif %}" href="{{ url_for('dashboard.group_calendar', group_id=g.id) }}">🧩 {{ g.name }}</a>
         {% endfor %}
+
+        <span style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:.75rem; color:var(--text-muted);">🗂️ Wszystkie plany:</span>
+          <form method="POST" action="{{ url_for('dashboard.toggle_all_plans') }}">
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <button type="submit" class="chip" style="background:var(--bg); color:var(--text); border:1px solid var(--border);">
+              {{ 'Wyłącz' if current_user.show_all_plans else 'Włącz' }}
+            </button>
+          </form>
+        </span>
       </div>
     </div>
   </div>
   {% endif %}
 
-  {% if not can_edit %}
+  {% if context == 'all' %}
+  <div class="readonly-banner" style="background:var(--primary-light); color:var(--primary); border-color:var(--primary);">
+    🗂️ Widok zagregowany — widzisz tu swój plan razem z planami znajomych i grup.
+    Dodawanie nowych wpisów trafia zawsze do Twojego własnego planu; cudze wpisy
+    oznaczone 👁/🧩 są tylko do podglądu (chyba że masz rolę editor/admin w danej grupie).
+  </div>
+  {% elif not can_edit %}
   <div class="readonly-banner">👁 Podgląd tylko do odczytu — nie możesz edytować tego planu.</div>
   {% endif %}
 
   <div class="type-filters" id="type-filters"></div>
+  <div class="source-legend" id="source-legend" style="display:none;"></div>
 
   <div class="card">
     <div class="card-body">

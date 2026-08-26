@@ -52,9 +52,39 @@ def create_app(config_class=Config) -> Flask:
     return app
 
 
+def _ensure_new_columns(app: Flask) -> None:
+    """
+    Lekka, poor-man's migracja: projekt nie używa Alembica, a `db.create_all()`
+    tworzy WYŁĄCZNIE brakujące tabele — nie dokłada nowych kolumn do tabel,
+    które już istnieją w bazie. Żeby aktualizacja do wersji z rolami grup /
+    "Wszystkie plany" / kategoriami grupowymi nie wymagała ręcznych ALTER-ów
+    ani kasowania bazy, sprawdzamy tu brakujące kolumny i dodajemy je sami.
+    Bezpieczne do wielokrotnego uruchamiania (sprawdza istnienie przed dodaniem).
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
+
+    additions = {
+        "users": [("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE")],
+        "activity_types": [("group_id", "INTEGER")],
+    }
+
+    with db.engine.begin() as conn:
+        for table, columns in additions.items():
+            if table not in existing_tables:
+                continue
+            existing_cols = {c["name"] for c in inspector.get_columns(table)}
+            for col_name, col_def in columns:
+                if col_name not in existing_cols:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
+
+
 def init_db(app: Flask) -> None:
     with app.app_context():
         db.create_all()
+        _ensure_new_columns(app)
         ActivityService.ensure_default_types()
 
 
