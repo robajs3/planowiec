@@ -1,10 +1,14 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 
+import re
+
 from models import db, User
 from models.user_model import AVATAR_PALETTE
 
 profile_bp = Blueprint("profile", __name__)
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 @profile_bp.route("/profile/")
@@ -20,8 +24,10 @@ def update():
     avatar_color = request.form.get("avatar_color", "").strip()
 
     current_user.display_name = display_name or None
-    if avatar_color in AVATAR_PALETTE:
-        current_user.avatar_color = avatar_color
+    # Dopuszczamy każdy poprawny kolor hex (#rrggbb) — nie tylko te z
+    # domyślnej palety — żeby użytkownik mógł ustawić dowolny, customowy kolor.
+    if _HEX_COLOR_RE.match(avatar_color):
+        current_user.avatar_color = avatar_color.lower()
     db.session.commit()
     flash("Zaktualizowano profil.", "success")
     return redirect(url_for("profile.index"))

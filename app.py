@@ -69,6 +69,8 @@ def _ensure_new_columns(app: Flask) -> None:
     additions = {
         "users": [("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE")],
         "activity_types": [("group_id", "INTEGER")],
+        "activities": [("recurrence_id", "VARCHAR(36)")],
+        "plan_access": [("role", "VARCHAR(20) NOT NULL DEFAULT 'viewer'")],
     }
 
     with db.engine.begin() as conn:

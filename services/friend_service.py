@@ -3,7 +3,10 @@ from datetime import datetime
 from sqlalchemy import or_, and_
 
 from models import db, User, Friendship, PlanAccess
-from models.friendship_model import STATUS_PENDING, STATUS_ACCEPTED, STATUS_DECLINED
+from models.friendship_model import (
+    STATUS_PENDING, STATUS_ACCEPTED, STATUS_DECLINED,
+    ACCESS_EDITOR, ACCESS_COMMENTER, ACCESS_VIEWER, ALL_ACCESS_ROLES,
+)
 
 
 class FriendService:
@@ -108,13 +111,29 @@ class FriendService:
 
     # ---------- dostęp do planów ----------
     @staticmethod
-    def grant_access(owner_id: int, viewer_id: int) -> tuple[bool, str | None]:
+    def grant_access(owner_id: int, viewer_id: int, role: str = ACCESS_VIEWER) -> tuple[bool, str | None]:
         if not FriendService.are_friends(owner_id, viewer_id):
             return False, "Dostęp do planu można nadać tylko znajomym."
+        if role not in ALL_ACCESS_ROLES:
+            role = ACCESS_VIEWER
         existing = PlanAccess.query.filter_by(owner_id=owner_id, viewer_id=viewer_id).first()
         if existing:
+            existing.role = role
+            db.session.commit()
             return True, None
-        db.session.add(PlanAccess(owner_id=owner_id, viewer_id=viewer_id))
+        db.session.add(PlanAccess(owner_id=owner_id, viewer_id=viewer_id, role=role))
+        db.session.commit()
+        return True, None
+
+    @staticmethod
+    def update_access_role(owner_id: int, viewer_id: int, role: str) -> tuple[bool, str | None]:
+        """Zmienia rolę już nadanego dostępu (bez konieczności odbierania/nadawania od nowa)."""
+        if role not in ALL_ACCESS_ROLES:
+            return False, "Nieprawidłowa rola."
+        access = PlanAccess.query.filter_by(owner_id=owner_id, viewer_id=viewer_id).first()
+        if not access:
+            return False, "Nie nadano jeszcze dostępu tej osobie."
+        access.role = role
         db.session.commit()
         return True, None
 
@@ -128,6 +147,16 @@ class FriendService:
         if owner_id == viewer_id:
             return True
         return PlanAccess.query.filter_by(owner_id=owner_id, viewer_id=viewer_id).first() is not None
+
+    @staticmethod
+    def get_access_role(owner_id: int, viewer_id: int) -> str | None:
+        """Rola `viewer_id` w planie `owner_id`: 'editor' dla właściciela samego
+        siebie, rola z PlanAccess dla znajomego z nadanym dostępem, albo None
+        (brak dostępu)."""
+        if owner_id == viewer_id:
+            return ACCESS_EDITOR
+        access = PlanAccess.query.filter_by(owner_id=owner_id, viewer_id=viewer_id).first()
+        return access.role if access else None
 
     @staticmethod
     def list_viewers_for(owner_id: int):

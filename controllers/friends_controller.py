@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 
 from models import User
-from models.friendship_model import STATUS_ACCEPTED
+from models.friendship_model import STATUS_ACCEPTED, ALL_ACCESS_ROLES, ACCESS_VIEWER, ACCESS_ROLE_LABELS
 from services.friend_service import FriendService
 
 friends_bp = Blueprint("friends", __name__)
@@ -25,7 +25,8 @@ def index():
     incoming = FriendService.list_incoming_requests(current_user.id)
     outgoing = FriendService.list_outgoing_requests(current_user.id)
 
-    granted_to = {pa.viewer_id for pa in FriendService.list_viewers_for(current_user.id)}
+    # {viewer_id: rola} dla znajomych, którym udostępniliśmy własny plan
+    granted_to = {pa.viewer_id: pa.role for pa in FriendService.list_viewers_for(current_user.id)}
     accessible_from = FriendService.list_accessible_owners_for(current_user.id)
 
     return render_template(
@@ -37,6 +38,8 @@ def index():
         outgoing=outgoing,
         granted_to=granted_to,
         accessible_from=accessible_from,
+        all_access_roles=ALL_ACCESS_ROLES,
+        access_role_labels=ACCESS_ROLE_LABELS,
     )
 
 
@@ -76,14 +79,38 @@ def remove_friend(friendship_id):
     return redirect(url_for("friends.index"))
 
 
+@friends_bp.route("/friends/cancel/<int:friendship_id>", methods=["POST"])
+@login_required
+def cancel_request(friendship_id):
+    """Cofnięcie własnego, jeszcze nieobsłużonego zaproszenia do znajomych."""
+    ok = FriendService.remove_friend(friendship_id, current_user.id)
+    flash("Cofnięto zaproszenie." if ok else "Nie udało się cofnąć zaproszenia.", "info" if ok else "danger")
+    return redirect(url_for("friends.index"))
+
+
 @friends_bp.route("/friends/access/grant/<int:viewer_id>", methods=["POST"])
 @login_required
 def grant_access(viewer_id):
-    ok, error = FriendService.grant_access(current_user.id, viewer_id)
+    role = request.form.get("role", ACCESS_VIEWER)
+    if role not in ALL_ACCESS_ROLES:
+        role = ACCESS_VIEWER
+    ok, error = FriendService.grant_access(current_user.id, viewer_id, role)
     if ok:
         flash("Nadano dostęp do Twojego planu.", "success")
     else:
         flash(error, "danger")
+    return redirect(url_for("friends.index"))
+
+
+@friends_bp.route("/friends/access/role/<int:viewer_id>", methods=["POST"])
+@login_required
+def set_access_role(viewer_id):
+    role = request.form.get("role", ACCESS_VIEWER)
+    ok, error = FriendService.update_access_role(current_user.id, viewer_id, role)
+    if ok:
+        flash("Zmieniono rolę dostępu do Twojego planu.", "success")
+    else:
+        flash(error or "Nie udało się zmienić roli.", "danger")
     return redirect(url_for("friends.index"))
 
 

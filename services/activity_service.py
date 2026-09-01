@@ -1,6 +1,35 @@
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 
 from models import db, ActivityType, Activity, DEFAULT_ACTIVITY_TYPES
+
+RECURRENCE_NONE = "none"
+RECURRENCE_DAILY = "daily"
+RECURRENCE_WEEKLY = "weekly"
+RECURRENCE_MONTHLY = "monthly"
+ALL_RECURRENCES = [RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY]
+
+# Bezpiecznik, żeby literówka w dacie zakończenia serii (albo jej brak przy
+# cyklu dziennym) nie wygenerowała nieograniczonej liczby wpisów.
+MAX_RECURRENCE_OCCURRENCES = 366
+
+
+def _add_interval(dt: datetime, rule: str, step: int) -> datetime:
+    if rule == RECURRENCE_DAILY:
+        return dt + timedelta(days=step)
+    if rule == RECURRENCE_WEEKLY:
+        return dt + timedelta(weeks=step)
+    if rule == RECURRENCE_MONTHLY:
+        # Przesunięcie o `step` miesięcy z zachowaniem dnia miesiąca (obcinane
+        # do ostatniego dnia miesiąca docelowego, gdy oryginalny nie istnieje,
+        # np. 31 stycznia + 1 miesiąc -> 28/29 lutego).
+        month_index = dt.month - 1 + step
+        year = dt.year + month_index // 12
+        month = month_index % 12 + 1
+        import calendar
+        day = min(dt.day, calendar.monthrange(year, month)[1])
+        return dt.replace(year=year, month=month, day=day)
+    return dt
 
 
 class ActivityService:
@@ -191,20 +220,73 @@ class ActivityService:
         if not activity_type:
             return None, "Wybierz poprawny typ aktywności."
 
-        activity = Activity(
-            title=title,
-            description=(data.get("description") or "").strip(),
-            location=(data.get("location") or "").strip(),
-            start_time=start,
-            end_time=end,
-            all_day=bool(data.get("all_day")),
-            activity_type_id=activity_type.id,
-            owner_id=owner_id,
-            group_id=group_id,
-        )
-        db.session.add(activity)
+        recurrence_rule = data.get("recurrence") or RECURRENCE_NONE
+        if recurrence_rule not in ALL_RECURRENCES:
+            recurrence_rule = RECURRENCE_NONE
+
+        occurrences = [(start, end)]
+        recurrence_id = None
+
+        if recurrence_rule != RECURRENCE_NONE:
+            until_raw = (data.get("recurrence_until") or "").strip()
+            count_raw = data.get("recurrence_count")
+            duration = end - start
+
+            until = None
+            if until_raw:
+                try:
+                    until = datetime.fromisoformat(until_raw)
+                except ValueError:
+                    return None, "Nieprawidłowa data zakończenia cyklu."
+
+            try:
+                count = int(count_raw) if count_raw else None
+            except (TypeError, ValueError):
+                count = None
+
+            if not until and not count:
+                return None, "Podaj datę zakończenia cyklu albo liczbę powtórzeń."
+
+            recurrence_id = uuid.uuid4().hex
+            occurrences = []
+            cur_start = start
+            i = 0
+            while i < MAX_RECURRENCE_OCCURRENCES:
+                if until and cur_start.date() > until.date():
+                    break
+                if count and i >= count:
+                    break
+                occurrences.append((cur_start, cur_start + duration))
+                i += 1
+                cur_start = _add_interval(cur_start, recurrence_rule, 1)
+            if not occurrences:
+                return None, "Zakres cyklu nie zawiera żadnego wystąpienia."
+            if len(occurrences) == 1:
+                # Tylko jedno wystąpienie mieści się w podanym zakresie —
+                # traktujemy to jak zwykłą, jednorazową aktywność.
+                recurrence_id = None
+
+        created = []
+        for occ_start, occ_end in occurrences:
+            activity = Activity(
+                title=title,
+                description=(data.get("description") or "").strip(),
+                location=(data.get("location") or "").strip(),
+                start_time=occ_start,
+                end_time=occ_end,
+                all_day=bool(data.get("all_day")),
+                activity_type_id=activity_type.id,
+                owner_id=owner_id,
+                group_id=group_id,
+                recurrence_id=recurrence_id,
+            )
+            db.session.add(activity)
+            created.append(activity)
         db.session.commit()
-        return activity, None
+        # Zwracamy pierwsze wystąpienie — front dostaje natychmiastowe
+        # potwierdzenie, a resztę serii i tak pobierze przy kolejnym
+        # odświeżeniu widoku kalendarza.
+        return created[0], None
 
     @staticmethod
     def update_activity(activity: Activity, data: dict) -> tuple[bool, str | None]:
@@ -234,6 +316,37 @@ class ActivityService:
         return True, None
 
     @staticmethod
-    def delete_activity(activity: Activity) -> None:
+    def delete_activity(activity: Activity, scope: str = "single") -> int:
+        """Usuwa pojedynczą aktywność albo (gdy scope='series' i aktywność
+        należy do wydarzenia cyklicznego) wszystkie jej wystąpienia z tej
+        samej serii. Zwraca liczbę usuniętych wpisów."""
+        if scope == "series" and activity.recurrence_id:
+            rows = Activity.query.filter_by(recurrence_id=activity.recurrence_id).all()
+            count = len(rows)
+            for row in rows:
+                db.session.delete(row)
+            db.session.commit()
+            return count
         db.session.delete(activity)
         db.session.commit()
+        return 1
+
+    @staticmethod
+    def clear_day(owner_id: int | None, group_id: int | None, day: datetime) -> int:
+        """Usuwa WSZYSTKIE aktywności danego (pojedynczego) dnia w planie
+        prywatnym (owner_id) albo grupowym (group_id) — używane przez opcję
+        "Wyczyść dzień" w trybie edycji. Usuwa tylko wystąpienia tego dnia,
+        nie całe serie cykliczne, do których mogą należeć."""
+        day_start = datetime(day.year, day.month, day.day)
+        day_end = day_start + timedelta(days=1)
+        query = Activity.query.filter(Activity.start_time < day_end, Activity.end_time >= day_start)
+        if group_id is not None:
+            query = query.filter(Activity.group_id == group_id)
+        else:
+            query = query.filter(Activity.owner_id == owner_id, Activity.group_id.is_(None))
+        rows = query.all()
+        count = len(rows)
+        for row in rows:
+            db.session.delete(row)
+        db.session.commit()
+        return count

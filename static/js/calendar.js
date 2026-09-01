@@ -5,6 +5,18 @@
   const CONTEXT = root.dataset.context;
   const CONTEXT_ID = parseInt(root.dataset.contextId, 10);
   const CAN_EDIT = root.dataset.canEdit === "true";
+  const CAN_COMMENT = root.dataset.canComment === "true";
+  const CURRENT_USER_ID = parseInt(root.dataset.userId, 10);
+  // "Wyczyść dzień" ma sens tylko tam, gdzie mamy jeden, jednoznaczny,
+  // edytowalny plan (własny, plan grupy z rolą admin/editor, albo cudzy plan
+  // udostępniony z rolą "editor") — nie w zagregowanym widoku "Wszystkie plany".
+  const CLEAR_DAY_ENABLED = CONTEXT === "own" || ((CONTEXT === "group" || CONTEXT === "friend") && CAN_EDIT);
+  // Znaczniki dnia (legenda) — podgląd dostępny wszędzie poza zagregowanym
+  // "Wszystkie plany" (tam nie ma jednego planu do oznaczania); zarządzanie
+  // znacznikami i przypisywanie ich do dni wymaga tych samych warunków co
+  // "Wyczyść dzień" (jeden, jednoznaczny, edytowalny plan).
+  const DAY_MARKERS_VIEW_ENABLED = CONTEXT !== "all";
+  const DAY_MARKERS_EDIT_ENABLED = CLEAR_DAY_ENABLED;
   // Uwzględnia prefiks URL appki (ustawiany w templates/base.html), żeby
   // wywołania API działały poprawnie także gdy appka jest zamontowana
   // pod ścieżką inną niż "/" (np. za Tailscale Serve --set-path).
@@ -31,6 +43,9 @@
   let activeTypeIds = new Set();
   let activities = [];
   let editingActivityId = null;
+  let dayMarkers = [];
+  let dayMarkerAssignments = new Map(); // "YYYY-MM-DD" -> {marker_id, name, color}
+  let markMode = false; // tryb "Oznacz dni": klik w dzień otwiera wybór znacznika zamiast listy aktywności
 
   // Efektywny kontekst edycji aktualnie otwartej aktywności w modalu — w widoku
   // "all" różni się on od globalnego CONTEXT/CONTEXT_ID w zależności od tego,
@@ -175,6 +190,10 @@
     return { gridStart, gridEnd };
   }
 
+  function toDateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   async function loadActivities() {
     const { gridStart, gridEnd } = gridRange();
     const typeParam = Array.from(activeTypeIds).join(",");
@@ -185,7 +204,19 @@
       end: gridEnd.toISOString(),
       types: typeParam,
     });
-    activities = await apiGet(`${API_BASE}/activities?${params.toString()}`);
+    const jobs = [apiGet(`${API_BASE}/activities?${params.toString()}`)];
+    if (DAY_MARKERS_VIEW_ENABLED) {
+      const dmParams = new URLSearchParams({
+        context: CONTEXT, id: CONTEXT_ID,
+        start: toDateKey(gridStart), end: toDateKey(gridEnd),
+      });
+      jobs.push(apiGet(`${API_BASE}/day-markers/assignments?${dmParams.toString()}`));
+    }
+    const [activityResults, assignmentResults] = await Promise.all(jobs);
+    activities = activityResults;
+    if (DAY_MARKERS_VIEW_ENABLED) {
+      dayMarkerAssignments = new Map((assignmentResults || []).map((a) => [a.date, a]));
+    }
     renderGrid();
   }
 
@@ -221,6 +252,17 @@
       eventsWrap.className = "calendar-events";
 
       const dayActivities = activities.filter((a) => sameDate(new Date(a.start), dayDate));
+
+      // ---- Kolorowa ramka dnia wg przypisanego "znacznika dnia" (legenda) ----
+      // Całkowicie niezależne od aktywności/typów — patrz #day-markers-bar.
+      const marker = dayMarkerAssignments.get(toDateKey(dayDate));
+      if (marker) {
+        dayCell.style.borderColor = marker.color;
+        dayCell.style.borderWidth = "3px";
+        dayCell.classList.add("day-marked");
+        dayCell.title = marker.name;
+      }
+
       dayActivities.slice(0, 3).forEach((a) => {
         const chip = document.createElement("div");
         const srcKind = a.source ? a.source.kind : null;
@@ -255,7 +297,13 @@
       }
 
       dayCell.appendChild(eventsWrap);
-      dayCell.addEventListener("click", () => openDayModal(dayDate, dayActivities));
+      dayCell.addEventListener("click", () => {
+        if (markMode) {
+          openDayMarkerPicker(dayDate);
+        } else {
+          openDayModal(dayDate, dayActivities);
+        }
+      });
 
       // ---- Drag & drop: przeciąganie całego dnia (kopiowanie) ----
       const dayHasEditableActivities = dayActivities.some((a) => (a.source ? a.source.can_edit : CAN_EDIT));
@@ -298,6 +346,156 @@
 
   function sameDate(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  // ---------------------------------------------------------------------
+  // Znaczniki dnia (legenda) — całkowicie osobny system od typów aktywności.
+  // ---------------------------------------------------------------------
+  const dayMarkersBar = document.getElementById("day-markers-bar");
+  const dayMarkersModal = document.getElementById("day-markers-modal");
+  const dayMarkersListEl = document.getElementById("day-markers-list");
+  const dayMarkerForm = document.getElementById("day-marker-form");
+  const dayMarkerPickerModal = document.getElementById("day-marker-picker-modal");
+  const dayMarkerPickerTitle = document.getElementById("day-marker-picker-title");
+  const dayMarkerPickerList = document.getElementById("day-marker-picker-list");
+  const dayMarkerPickerClearBtn = document.getElementById("day-marker-picker-clear");
+  let pickerDay = null;
+
+  async function loadDayMarkers() {
+    if (!DAY_MARKERS_VIEW_ENABLED) return;
+    dayMarkers = await apiGet(`${API_BASE}/day-markers?context=${CONTEXT}&id=${CONTEXT_ID}`);
+    renderDayMarkersBar();
+  }
+
+  function renderDayMarkersBar() {
+    if (!DAY_MARKERS_VIEW_ENABLED) {
+      dayMarkersBar.style.display = "none";
+      return;
+    }
+    dayMarkersBar.style.display = "flex";
+    dayMarkersBar.innerHTML = "";
+
+    dayMarkers.forEach((m) => {
+      const chip = document.createElement("span");
+      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; font-size:.78rem; color:var(--text-muted);";
+      chip.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${m.color}; display:inline-block;"></span>${escapeHtml(m.name)}`;
+      dayMarkersBar.appendChild(chip);
+    });
+
+    if (DAY_MARKERS_EDIT_ENABLED) {
+      const manageBtn = document.createElement("button");
+      manageBtn.type = "button";
+      manageBtn.className = "btn btn-outline btn-sm";
+      manageBtn.textContent = "🏷 Znaczniki dnia";
+      manageBtn.addEventListener("click", () => {
+        renderDayMarkersManageList();
+        dayMarkersModal.classList.add("open");
+      });
+      dayMarkersBar.appendChild(manageBtn);
+
+      const toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "btn btn-sm " + (markMode ? "btn-primary" : "btn-outline");
+      toggleBtn.textContent = markMode ? "🎨 Tryb oznaczania: WŁĄCZONY" : "🎨 Oznacz dni";
+      toggleBtn.title = "Po włączeniu, kliknięcie dnia w kalendarzu pozwala przypisać mu znacznik zamiast otwierać listę aktywności.";
+      toggleBtn.addEventListener("click", () => {
+        markMode = !markMode;
+        renderDayMarkersBar();
+        renderGrid();
+      });
+      dayMarkersBar.appendChild(toggleBtn);
+    } else if (dayMarkers.length === 0) {
+      dayMarkersBar.style.display = "none";
+    }
+  }
+
+  function renderDayMarkersManageList() {
+    dayMarkersListEl.innerHTML = "";
+    if (!dayMarkers.length) {
+      dayMarkersListEl.innerHTML = '<div class="list-item-sub">Brak znaczników — dodaj pierwszy poniżej.</div>';
+      return;
+    }
+    dayMarkers.forEach((m) => {
+      const row = document.createElement("div");
+      row.className = "list-item";
+      row.innerHTML = `
+        <span class="type-dot" style="background:${m.color}"></span>
+        <div class="list-item-info"><div class="list-item-name">${escapeHtml(m.name)}</div></div>
+        <button type="button" class="type-filter-tool type-filter-tool-danger" title="Usuń znacznik">🗑</button>`;
+      row.querySelector("button").addEventListener("click", async () => {
+        if (!confirm(`Usunąć znacznik „${m.name}”? Zniknie też ze wszystkich oznaczonych nim dni.`)) return;
+        try {
+          await apiSend(`${API_BASE}/day-markers/${m.id}?context=${CONTEXT}&id=${CONTEXT_ID}`, "DELETE");
+          await loadDayMarkers();
+          renderDayMarkersManageList();
+          loadActivities();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+      dayMarkersListEl.appendChild(row);
+    });
+  }
+
+  if (dayMarkerForm) {
+    dayMarkerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("day-marker-name").value;
+      const color = document.getElementById("day-marker-color").value;
+      try {
+        await apiSend(`${API_BASE}/day-markers?context=${CONTEXT}&id=${CONTEXT_ID}`, "POST", { name, color });
+        dayMarkerForm.reset();
+        document.getElementById("day-marker-color").value = "#ef4444";
+        await loadDayMarkers();
+        renderDayMarkersManageList();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
+
+  function openDayMarkerPicker(date) {
+    pickerDay = date;
+    dayMarkerPickerTitle.textContent = "Oznacz: " + date.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+    dayMarkerPickerList.innerHTML = "";
+    if (!dayMarkers.length) {
+      dayMarkerPickerList.innerHTML = '<div class="list-item-sub">Nie masz jeszcze żadnych znaczników. Dodaj je w „🏷 Znaczniki dnia”.</div>';
+    }
+    dayMarkers.forEach((m) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "list-item";
+      btn.style.cssText = "width:100%; text-align:left; cursor:pointer; border:1px solid var(--border); background:var(--bg-card);";
+      btn.innerHTML = `<span class="type-dot" style="background:${m.color}"></span><div class="list-item-info"><div class="list-item-name">${escapeHtml(m.name)}</div></div>`;
+      btn.addEventListener("click", async () => {
+        try {
+          await apiSend(`${API_BASE}/day-markers/assign?context=${CONTEXT}&id=${CONTEXT_ID}`, "POST", {
+            date: toDateKey(pickerDay), marker_id: m.id,
+          });
+          closeModal(dayMarkerPickerModal);
+          loadActivities();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+      dayMarkerPickerList.appendChild(btn);
+    });
+    dayMarkerPickerModal.classList.add("open");
+  }
+
+  if (dayMarkerPickerClearBtn) {
+    dayMarkerPickerClearBtn.addEventListener("click", async () => {
+      if (!pickerDay) return;
+      try {
+        await apiSend(`${API_BASE}/day-markers/assign?context=${CONTEXT}&id=${CONTEXT_ID}`, "POST", {
+          date: toDateKey(pickerDay), marker_id: null,
+        });
+        closeModal(dayMarkerPickerModal);
+        loadActivities();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
   }
 
   function escapeHtml(str) {
@@ -389,6 +587,7 @@
   const dayModalTitle = document.getElementById("day-modal-title");
   const dayModalList = document.getElementById("day-modal-list");
   const dayModalAddBtn = document.getElementById("day-modal-add");
+  const dayModalClearBtn = document.getElementById("day-modal-clear");
   let selectedDay = null;
 
   function openDayModal(date, dayActivities) {
@@ -411,11 +610,12 @@
             : `${formatTime(a.start)} – ${formatTime(a.end)}`;
           const srcIcon = a.source ? SOURCE_ICON[a.source.kind] : "";
           const srcLabel = a.source ? ` · ${escapeHtml(a.source.label)}` : "";
+          const commentBadge = a.comment_count ? ` · 💬 ${a.comment_count}` : "";
           item.innerHTML = `
             <span class="type-dot" style="background:${a.type ? a.type.color : "#64748b"}"></span>
             <div class="list-item-info">
-              <div class="list-item-name">${srcIcon ? srcIcon + " " : ""}${escapeHtml(a.title)}</div>
-              <div class="list-item-sub">${time}${a.location ? " · " + escapeHtml(a.location) : ""}${srcLabel}</div>
+              <div class="list-item-name">${srcIcon ? srcIcon + " " : ""}${escapeHtml(a.title)}${a.recurrence_id ? " 🔁" : ""}</div>
+              <div class="list-item-sub">${time}${a.location ? " · " + escapeHtml(a.location) : ""}${srcLabel}${commentBadge}</div>
             </div>`;
           item.addEventListener("click", () => openActivityModal(a));
           dayModalList.appendChild(item);
@@ -423,12 +623,29 @@
     }
 
     dayModalAddBtn.style.display = CAN_EDIT ? "inline-flex" : "none";
+    dayModalClearBtn.style.display = (CLEAR_DAY_ENABLED && dayActivities.length > 0) ? "inline-flex" : "none";
     dayModal.classList.add("open");
   }
 
   dayModalAddBtn.addEventListener("click", () => {
     dayModal.classList.remove("open");
     openActivityModal(null, selectedDay);
+  });
+
+  dayModalClearBtn.addEventListener("click", async () => {
+    if (!selectedDay) return;
+    if (!confirm("Na pewno usunąć WSZYSTKIE aktywności tego dnia? Tej operacji nie można cofnąć.")) return;
+    try {
+      await apiSend(`${API_BASE}/activities/clear-day`, "POST", {
+        context: CONTEXT === "all" ? "own" : CONTEXT,
+        id: CONTEXT_ID,
+        date: formatLocal(selectedDay),
+      });
+      closeModal(dayModal);
+      loadActivities();
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   function formatTime(iso) {
@@ -446,6 +663,18 @@
   const actDeleteBtn = document.getElementById("activity-delete");
   const actSaveBtn = document.getElementById("activity-save");
   const actReadonlyBanner = document.getElementById("activity-readonly-banner");
+  const actRecurrenceGroup = document.getElementById("activity-recurrence-group");
+  const actRecurrenceSelect = document.getElementById("activity-recurrence");
+  const actRecurrenceUntilRow = document.getElementById("activity-recurrence-until-row");
+  const actRecurrenceUntil = document.getElementById("activity-recurrence-until");
+  const actRecurrenceCount = document.getElementById("activity-recurrence-count");
+  const actCommentsSection = document.getElementById("activity-comments-section");
+  const actCommentsList = document.getElementById("activity-comments-list");
+  const actCommentFormRow = document.getElementById("activity-comment-form-row");
+  const actCommentInput = document.getElementById("activity-comment-input");
+  const actCommentSendBtn = document.getElementById("activity-comment-send");
+
+  let editingActivity = null; // pełny obiekt aktualnie edytowanej/przeglądanej aktywności
 
   function populateTypeSelect(ctxKind, ctxId) {
     actTypeSelect.innerHTML = "";
@@ -467,16 +696,91 @@
     return formatLocal(new Date(iso));
   }
 
+  actRecurrenceSelect.addEventListener("change", () => {
+    actRecurrenceUntilRow.style.display = actRecurrenceSelect.value === "none" ? "none" : "flex";
+  });
+
+  // ---- Komentarze ----
+  function renderComments(comments, canComment) {
+    actCommentsList.innerHTML = "";
+    if (!comments.length) {
+      actCommentsList.innerHTML = '<div class="list-item-sub">Brak komentarzy.</div>';
+    } else {
+      comments.forEach((c) => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; gap:8px; align-items:flex-start;";
+        const initials = c.author ? c.author.initials : "?";
+        const color = c.author ? c.author.avatar_color : "#64748b";
+        const when = new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        const canDelete = CURRENT_USER_ID === (c.author ? c.author.id : null) || CURRENT_USER_ID === editingActivity.ownerId;
+        row.innerHTML = `
+          <div class="avatar" style="background:${color}; width:26px; height:26px; font-size:.65rem; flex-shrink:0;">${initials}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:.78rem;"><strong>${escapeHtml(c.author ? c.author.name : "Ktoś")}</strong> <span class="list-item-sub">· ${when}</span></div>
+            <div style="font-size:.85rem; word-break:break-word;">${escapeHtml(c.content)}</div>
+          </div>
+          ${canDelete ? `<button type="button" class="type-filter-tool type-filter-tool-danger" title="Usuń komentarz" style="flex-shrink:0;">🗑</button>` : ""}`;
+        if (canDelete) {
+          row.querySelector("button").addEventListener("click", async () => {
+            if (!confirm("Usunąć ten komentarz?")) return;
+            try {
+              await apiSend(`${API_BASE}/comments/${c.id}`, "DELETE");
+              loadComments();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
+        }
+        actCommentsList.appendChild(row);
+      });
+    }
+    actCommentFormRow.style.display = canComment ? "flex" : "none";
+  }
+
+  async function loadComments() {
+    if (!editingActivity) return;
+    try {
+      const comments = await apiGet(`${API_BASE}/activities/${editingActivity.id}/comments`);
+      renderComments(comments, editCtx.canComment);
+    } catch (err) {
+      actCommentsList.innerHTML = '<div class="list-item-sub">Nie udało się wczytać komentarzy.</div>';
+    }
+  }
+
+  actCommentSendBtn.addEventListener("click", async () => {
+    const content = actCommentInput.value.trim();
+    if (!content || !editingActivity) return;
+    try {
+      await apiSend(`${API_BASE}/activities/${editingActivity.id}/comments`, "POST", { content });
+      actCommentInput.value = "";
+      loadComments();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+  actCommentInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      actCommentSendBtn.click();
+    }
+  });
+
   function openActivityModal(activity, presetDate) {
     editingActivityId = activity ? activity.id : null;
+    editingActivity = activity
+      ? { id: activity.id, recurrenceId: activity.recurrence_id, ownerId: activity.owner ? activity.owner.id : null }
+      : null;
 
     if (activity && activity.source) {
-      editCtx = { context: activity.source.kind, id: activity.source.id, canEdit: activity.source.can_edit };
+      editCtx = {
+        context: activity.source.kind, id: activity.source.id,
+        canEdit: activity.source.can_edit, canComment: !!activity.source.can_comment,
+      };
     } else if (activity) {
-      editCtx = { context: CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT };
+      editCtx = { context: CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT, canComment: CAN_COMMENT };
     } else {
       // Nowa aktywność: w widoku zagregowanym zawsze trafia do własnego planu.
-      editCtx = { context: CONTEXT === "all" ? "own" : CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT };
+      editCtx = { context: CONTEXT === "all" ? "own" : CONTEXT, id: CONTEXT_ID, canEdit: CAN_EDIT, canComment: CAN_COMMENT };
     }
 
     populateTypeSelect(editCtx.context, editCtx.id);
@@ -485,6 +789,7 @@
     actTitle.textContent = activity ? (readOnly ? "Szczegóły aktywności" : "Edytuj aktywność") : "Nowa aktywność";
     actReadonlyBanner.style.display = readOnly ? "flex" : "none";
     actDeleteBtn.style.display = activity && !readOnly ? "inline-flex" : "none";
+    actDeleteBtn.textContent = activity && activity.recurrence_id ? "Usuń…" : "Usuń";
     actSaveBtn.style.display = readOnly ? "none" : "inline-flex";
 
     document.getElementById("activity-title").value = activity ? activity.title : "";
@@ -502,9 +807,39 @@
     document.getElementById("activity-end").value = toLocalInput(endDate);
     actTypeSelect.value = activity && activity.type ? activity.type.id : (actTypeSelect.options[0] ? actTypeSelect.options[0].value : "");
 
+    // Cykliczność ustawiamy tylko przy TWORZENIU nowej aktywności — edycja
+    // pojedynczego, już istniejącego wystąpienia serii nie zmienia reguły cyklu.
+    actRecurrenceSelect.value = "none";
+    actRecurrenceUntil.value = "";
+    actRecurrenceCount.value = "";
+    actRecurrenceUntilRow.style.display = "none";
+    actRecurrenceGroup.style.display = (!activity && !readOnly) ? "block" : "none";
+
     Array.from(actForm.elements).forEach((el) => {
       if (el.type !== "button" && el.type !== "submit") el.disabled = readOnly;
     });
+    // Cykliczność dotyczy tylko tworzenia nowej aktywności — niezależnie od
+    // stanu ustawionego przez powyższą pętlę, wymuszamy właściwy stan pól.
+    actRecurrenceSelect.disabled = readOnly || !!activity;
+    actRecurrenceUntil.disabled = readOnly || !!activity;
+    actRecurrenceCount.disabled = readOnly || !!activity;
+
+    // Komentowanie ma własne uprawnienie (canComment), niezależne od canEdit —
+    // np. znajomy z rolą "commenter" nie może edytować planu, ale może pisać
+    // komentarze, więc pole komentarza NIE powinno dziedziczyć stanu `readOnly`.
+    const canWriteComment = !!(activity && editCtx.canComment);
+    actCommentInput.disabled = !canWriteComment;
+    actCommentSendBtn.disabled = !canWriteComment;
+
+    // Komentarze: dostępne tylko dla już istniejących aktywności, gdy mamy
+    // do nich w ogóle dostęp (czyli zawsze, skoro w ogóle je widzimy).
+    if (activity) {
+      actCommentsSection.style.display = "block";
+      actCommentsList.innerHTML = '<div class="list-item-sub">Wczytywanie…</div>';
+      loadComments();
+    } else {
+      actCommentsSection.style.display = "none";
+    }
 
     actModal.classList.add("open");
   }
@@ -527,6 +862,15 @@
       end: document.getElementById("activity-end").value,
       activity_type_id: parseInt(actTypeSelect.value, 10),
     };
+    if (!editingActivityId && actRecurrenceSelect.value !== "none") {
+      payload.recurrence = actRecurrenceSelect.value;
+      if (actRecurrenceUntil.value) payload.recurrence_until = actRecurrenceUntil.value;
+      if (actRecurrenceCount.value) payload.recurrence_count = parseInt(actRecurrenceCount.value, 10);
+      if (!actRecurrenceUntil.value && !actRecurrenceCount.value) {
+        alert("Podaj datę zakończenia cyklu albo liczbę powtórzeń.");
+        return;
+      }
+    }
     try {
       if (editingActivityId) {
         await apiSend(`${API_BASE}/activities/${editingActivityId}`, "PUT", payload);
@@ -542,9 +886,17 @@
 
   actDeleteBtn.addEventListener("click", async () => {
     if (!editingActivityId) return;
-    if (!confirm("Na pewno usunąć tę aktywność?")) return;
+    let scope = "single";
+    if (editingActivity && editingActivity.recurrenceId) {
+      if (!confirm("Ta aktywność jest częścią cyklu. Usunąć tylko ten dzień? (Anuluj, żeby zamiast tego usunąć całą serię)")) {
+        if (!confirm("Usunąć całą serię tego wydarzenia cyklicznego?")) return;
+        scope = "series";
+      }
+    } else if (!confirm("Na pewno usunąć tę aktywność?")) {
+      return;
+    }
     try {
-      await apiSend(`${API_BASE}/activities/${editingActivityId}?context=${editCtx.context}&id=${editCtx.id}`, "DELETE");
+      await apiSend(`${API_BASE}/activities/${editingActivityId}?context=${editCtx.context}&id=${editCtx.id}&scope=${scope}`, "DELETE");
       closeModal(actModal);
       loadActivities();
     } catch (err) {
@@ -626,7 +978,7 @@
   // Start
   // ---------------------------------------------------------------------
   (async function init() {
-    await loadTypes();
+    await Promise.all([loadTypes(), loadDayMarkers()]);
     // Ładujemy widok dokładnie tak, jakby domyślnie kliknięto przycisk "Dziś",
     // żeby po wejściu w cudzy plan od razu było widać bieżący miesiąc z aktywnościami.
     goToToday();

@@ -6,6 +6,21 @@ STATUS_PENDING = "pending"
 STATUS_ACCEPTED = "accepted"
 STATUS_DECLINED = "declined"
 
+# Rola nadawana znajomemu wraz z dostępem do własnego planu (PlanAccess.role):
+#   editor    – może dodawać/edytować/usuwać wpisy w Twoim planie oraz komentować
+#   commenter – nie może edytować planu, ale może dodawać komentarze do wpisów
+#   viewer    – wyłącznie podgląd, bez możliwości edycji ani komentowania
+ACCESS_EDITOR = "editor"
+ACCESS_COMMENTER = "commenter"
+ACCESS_VIEWER = "viewer"
+
+ALL_ACCESS_ROLES = [ACCESS_EDITOR, ACCESS_COMMENTER, ACCESS_VIEWER]
+ACCESS_ROLE_LABELS = {
+    ACCESS_EDITOR: "Może edytować",
+    ACCESS_COMMENTER: "Może komentować",
+    ACCESS_VIEWER: "Tylko podgląd",
+}
+
 
 class Friendship(db.Model):
     """
@@ -37,8 +52,9 @@ class Friendship(db.Model):
 
 class PlanAccess(db.Model):
     """
-    Nadanie dostępu do podglądu własnego planu (kalendarza) innemu użytkownikowi.
-    Dostęp jest zawsze tylko-do-odczytu.
+    Nadanie dostępu do własnego planu (kalendarza) innemu użytkownikowi, wraz
+    z rolą określającą zakres uprawnień (patrz ACCESS_* powyżej). Domyślnie
+    (i dla rekordów sprzed wprowadzenia ról) — wyłącznie podgląd.
     """
     __tablename__ = "plan_access"
     __table_args__ = (
@@ -48,7 +64,12 @@ class PlanAccess(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     viewer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    role = db.Column(db.String(20), default=ACCESS_VIEWER, nullable=False)
     granted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner = db.relationship("User", foreign_keys=[owner_id])
     viewer = db.relationship("User", foreign_keys=[viewer_id])
+
+    @property
+    def role_label(self) -> str:
+        return ACCESS_ROLE_LABELS.get(self.role, self.role)

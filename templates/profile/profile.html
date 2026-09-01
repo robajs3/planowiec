@@ -23,14 +23,33 @@
         </div>
         <div class="form-group">
           <label class="form-label">Kolor awatara</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             {% for color in palette %}
               <label style="cursor:pointer;">
-                <input type="radio" name="avatar_color" value="{{ color }}" {% if current_user.avatar_color == color %}checked{% endif %} style="display:none;" onchange="this.closest('form').requestSubmit ? null : null;">
-                <span style="display:inline-block; width:30px; height:30px; border-radius:50%; background:{{ color }}; border:3px solid {{ 'var(--text)' if current_user.avatar_color == color else 'transparent' }};" onclick="this.previousElementSibling.checked=true;"></span>
+                <input type="radio" name="avatar_color" value="{{ color }}" {% if current_user.avatar_color == color %}checked{% endif %} style="display:none;" class="avatar-color-radio">
+                <span style="display:inline-block; width:30px; height:30px; border-radius:50%; background:{{ color }}; border:3px solid {{ 'var(--text)' if current_user.avatar_color == color else 'transparent' }};" onclick="this.previousElementSibling.checked=true; document.getElementById('avatar-color-custom').dataset.active='';"></span>
               </label>
             {% endfor %}
+            {% set is_custom = current_user.avatar_color not in palette %}
+            <label style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="Własny, dowolny kolor">
+              <input type="radio" name="avatar_color" value="{{ current_user.avatar_color if is_custom else '' }}"
+                     id="avatar-color-custom-radio" {% if is_custom %}checked{% endif %} style="display:none;">
+              <input type="color" id="avatar-color-custom" value="{{ current_user.avatar_color if is_custom else '#4f46e5' }}"
+                     style="width:34px; height:34px; padding:2px; border-radius:50%; border:3px solid {{ 'var(--text)' if is_custom else 'transparent' }}; cursor:pointer;"
+                     onchange="document.getElementById('avatar-color-custom-radio').value=this.value; document.getElementById('avatar-color-custom-radio').checked=true;">
+              <span class="list-item-sub" style="font-size:.72rem;">Własny kolor</span>
+            </label>
           </div>
+          <script>
+            // Gdy zmieniamy kolor customowy poprzez natywny picker, ustawiamy
+            // od razu wartość ukrytego radio na aktualnie wybrany kolor hex —
+            // dzięki temu formularz wysyła dokładnie ten kolor, niezależnie
+            // od tego, czy pasuje on do palety domyślnej, czy nie.
+            document.getElementById("avatar-color-custom").addEventListener("input", function () {
+              document.getElementById("avatar-color-custom-radio").value = this.value;
+              document.getElementById("avatar-color-custom-radio").checked = true;
+            });
+          </script>
         </div>
         <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
       </form>

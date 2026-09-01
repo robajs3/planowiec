@@ -3,8 +3,23 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 from models.user_model import User  # noqa: E402
-from models.friendship_model import Friendship, PlanAccess  # noqa: E402
-from models.activity_model import ActivityType, Activity, DEFAULT_ACTIVITY_TYPES  # noqa: E402
+from models.friendship_model import (  # noqa: E402
+    Friendship,
+    PlanAccess,
+    ACCESS_EDITOR,
+    ACCESS_COMMENTER,
+    ACCESS_VIEWER,
+    ALL_ACCESS_ROLES,
+    ACCESS_ROLE_LABELS,
+)
+from models.activity_model import (  # noqa: E402
+    ActivityType,
+    Activity,
+    ActivityComment,
+    DayMarker,
+    DayMarkerAssignment,
+    DEFAULT_ACTIVITY_TYPES,
+)
 from models.group_model import (  # noqa: E402
     Group,
     GroupMember,
@@ -21,8 +36,16 @@ __all__ = [
     "User",
     "Friendship",
     "PlanAccess",
+    "ACCESS_EDITOR",
+    "ACCESS_COMMENTER",
+    "ACCESS_VIEWER",
+    "ALL_ACCESS_ROLES",
+    "ACCESS_ROLE_LABELS",
     "ActivityType",
     "Activity",
+    "ActivityComment",
+    "DayMarker",
+    "DayMarkerAssignment",
     "DEFAULT_ACTIVITY_TYPES",
     "Group",
     "GroupMember",

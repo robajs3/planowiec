@@ -3,7 +3,7 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div id="calendar-app" data-context="{{ context }}" data-context-id="{{ context_id }}" data-can-edit="{{ 'true' if can_edit else 'false' }}">
+<div id="calendar-app" data-context="{{ context }}" data-context-id="{{ context_id }}" data-can-edit="{{ 'true' if can_edit else 'false' }}" data-can-comment="{{ 'true' if can_comment else 'false' }}" data-user-id="{{ current_user.id }}">
 
   {% if announcements %}
   <div style="margin-bottom:18px;">
@@ -36,7 +36,7 @@
         <span style="margin-left:auto; display:flex; align-items:center; gap:8px;">
           <span style="font-size:.75rem; color:var(--text-muted);">🗂️ Wszystkie plany:</span>
           <form method="POST" action="{{ url_for('dashboard.toggle_all_plans') }}">
-            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="hidden" name="next" value="{{ request.script_root }}{{ request.path }}">
             <button type="submit" class="chip" style="background:var(--bg); color:var(--text); border:1px solid var(--border);">
               {{ 'Wyłącz' if current_user.show_all_plans else 'Włącz' }}
             </button>
@@ -59,6 +59,7 @@
 
   <div class="type-filters" id="type-filters"></div>
   <div class="source-legend" id="source-legend" style="display:none;"></div>
+  <div id="day-markers-bar" style="display:none; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
 
   <div class="card">
     <div class="card-body">
@@ -89,6 +90,7 @@
     </div>
     <div class="modal-body" id="day-modal-list"></div>
     <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" id="day-modal-clear" style="display:none; margin-right:auto; color:var(--danger); border-color:var(--danger);">🧹 Wyczyść dzień</button>
       <button class="btn btn-primary btn-sm" id="day-modal-add">+ Dodaj aktywność</button>
     </div>
   </div>
@@ -134,6 +136,35 @@
           <label class="form-label" for="activity-description">Opis</label>
           <textarea class="form-control" id="activity-description"></textarea>
         </div>
+
+        <div class="form-group" id="activity-recurrence-group">
+          <label class="form-label" for="activity-recurrence">🔁 Powtarzaj</label>
+          <select class="form-control" id="activity-recurrence">
+            <option value="none">Nigdy (jednorazowo)</option>
+            <option value="daily">Codziennie</option>
+            <option value="weekly">Co tydzień</option>
+            <option value="monthly">Co miesiąc</option>
+          </select>
+          <div class="form-row" id="activity-recurrence-until-row" style="display:none; margin-top:8px;">
+            <div class="form-group">
+              <label class="form-label" for="activity-recurrence-until">Powtarzaj do (włącznie)</label>
+              <input class="form-control" type="date" id="activity-recurrence-until">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="activity-recurrence-count">albo liczba powtórzeń</label>
+              <input class="form-control" type="number" min="1" max="366" id="activity-recurrence-count" placeholder="np. 10">
+            </div>
+          </div>
+        </div>
+
+        <div id="activity-comments-section" style="display:none; border-top:1px solid var(--border); margin-top:10px; padding-top:14px;">
+          <div class="form-label" style="margin-bottom:8px;">💬 Komentarze</div>
+          <div id="activity-comments-list" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:10px;"></div>
+          <div id="activity-comment-form-row" style="display:flex; gap:8px;">
+            <input class="form-control" type="text" id="activity-comment-input" placeholder="Napisz komentarz…" maxlength="2000">
+            <button type="button" class="btn btn-secondary btn-sm" id="activity-comment-send">Wyślij</button>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger btn-sm" id="activity-delete" style="display:none; margin-right:auto;">Usuń</button>
@@ -167,6 +198,49 @@
         <button type="submit" class="btn btn-primary btn-sm" id="type-save">Dodaj typ</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal: znaczniki dnia (legenda) — zarządzanie własną listą "typów dnia",
+     zupełnie niezależną od typów aktywności -->
+<div class="modal-backdrop" id="day-markers-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🏷 Znaczniki dnia (legenda)</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="list-item-sub" style="margin-bottom:12px;">
+        Zdefiniuj własne znaczniki i przypisuj po jednym do dnia w kalendarzu —
+        dzień dostanie kolorową ramkę. To nie ma nic wspólnego z typami aktywności.
+      </p>
+      <div id="day-markers-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;"></div>
+      <form id="day-marker-form" style="display:flex; gap:8px; align-items:center;">
+        <input type="color" id="day-marker-color" value="#ef4444" style="width:40px; height:38px; padding:2px; flex-shrink:0;">
+          <input type="text" id="day-marker-name" class="form-control" placeholder="Nazwa znacznika" maxlength="60" required>
+        <button type="submit" class="btn btn-secondary btn-sm" style="flex-shrink:0;">+ Dodaj</button>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Zamknij</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: szybki wybór znacznika dla klikniętego dnia (tryb "Oznacz dni") -->
+<div class="modal-backdrop" id="day-marker-picker-modal">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-header">
+      <h3 id="day-marker-picker-title">Oznacz dzień</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="day-marker-picker-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline btn-sm" id="day-marker-picker-clear" style="margin-right:auto;">Wyczyść znacznik</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Anuluj</button>
+    </div>
   </div>
 </div>
 {% endblock %}

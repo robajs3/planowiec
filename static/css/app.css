@@ -319,6 +319,21 @@ table.data-table tr:last-child td { border-bottom: none; }
 .calendar-event-chip.draggable-chip:active { cursor: grabbing; }
 .calendar-day.day-dragging { opacity: .5; }
 
+/* ===== "ZNACZNIKI DNIA" (legenda) — kolorowe ramki dni, niezależne od typów ===== */
+.calendar-day.day-marked { transition: border-color var(--transition); }
+#day-markers-bar { padding: 4px 0; }
+#day-marker-picker-list .list-item:hover { border-color: var(--primary) !important; }
+
+/* ===== WYDARZENIA CYKLICZNE ===== */
+#activity-recurrence-group { background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 12px; }
+#activity-recurrence-group .form-label { margin-bottom: 6px; }
+
+/* ===== KOMENTARZE DO AKTYWNOŚCI ===== */
+#activity-comments-list { scrollbar-width: thin; }
+#activity-comments-list::-webkit-scrollbar { width: 6px; }
+#activity-comments-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#activity-comment-input { flex: 1; }
+
 /* ===== PRZEŁĄCZNIK "WSZYSTKIE PLANY" ===== */
 .switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
 .switch input { opacity: 0; width: 0; height: 0; }
