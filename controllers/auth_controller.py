@@ -52,11 +52,15 @@ def login():
 @auth_bp.route("/auth/logout")
 @login_required
 def logout():
-    # Wylogowanie musi być globalne (ze wszystkich appek naraz), więc oprócz
-    # lokalnej sesji Flask-Login czyścimy też ciasteczko SSO LoginHub —
-    # inaczej _sso_autologin zalogowałby z powrotem przy następnym żądaniu.
-    response = make_response(redirect(url_for("auth.login")))
+    # Wylogowanie musi być globalne (ze wszystkich appek naraz): oprócz
+    # lokalnej sesji Flask-Login czyścimy ciasteczko SSO LoginHub i odsyłamy
+    # na ekran logowania LOGINHUB (nie na lokalny /auth/login) — inaczej
+    # ciasteczko sso_session i tak by zostało ważne i _sso_autologin
+    # zalogowałby z powrotem przy następnym wejściu na dowolną appkę SSO.
+    # next_path budujemy przez url_for (nie na sztywno "/planowiec/"),
+    # żeby poprawnie uwzględniał PREFIX z PrefixMiddleware.
+    next_path = url_for("dashboard.index")
+    response = make_response(redirect(sso_client.login_url(next_path)))
     sso_client.clear_sso_cookie(response)
     logout_user()
-    flash("Wylogowano pomyślnie.", "info")
     return response
