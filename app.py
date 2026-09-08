@@ -44,7 +44,14 @@ def create_app(config_class=Config) -> Flask:
     @login_manager.unauthorized_handler
     def _unauthorized():
         from flask import request
-        return redirect(sso_client.login_url(request.path))
+        # UWAGA: Tailscale Serve/Funnel z --set-path ścina prefiks (np. /planowiec)
+        # zanim żądanie trafi do Flaska, więc request.path go NIE zawiera (patrz
+        # docstring PrefixMiddleware niżej w tym pliku). PrefixMiddleware wpisuje
+        # prefiks do SCRIPT_NAME, więc request.script_root go ma — doklejamy
+        # ręcznie, inaczej LoginHub po zalogowaniu odeśle poza appkę (np. na
+        # /dashboard/ zamiast /planowiec/dashboard/).
+        next_path = request.script_root + request.path
+        return redirect(sso_client.login_url(next_path))
 
     # Blueprinty — wszystkie prefiksy URL po angielsku
     app.register_blueprint(auth_bp)
