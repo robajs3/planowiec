@@ -1,10 +1,11 @@
 from flask import Flask, render_template, redirect, url_for
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user, login_user
 
 from config import Config
 from models import db, User
 from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp
 from services.activity_service import ActivityService
+import sso_client
 
 
 def create_app(config_class=Config) -> Flask:
@@ -23,6 +24,27 @@ def create_app(config_class=Config) -> Flask:
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    # --- SSO (LoginHub) ---------------------------------------------------
+    # Jeśli user nie jest zalogowany lokalnie, sprawdź czy ma ważne ciasteczko
+    # LoginHub i czy jego konto jest połączone z planowcem. Jeśli tak — zaloguj
+    # go lokalnie (login_user), tak jakby przeszedł przez /auth/login. Zwykłe
+    # logowanie hasłem (/auth/login, /auth/register) zostaje bez zmian jako
+    # plan B — SSO tylko "podszywa się" pod normalne zalogowanie.
+    @app.before_request
+    def _sso_autologin():
+        if current_user.is_authenticated:
+            return
+        local_id = sso_client.resolve_local_user_id(app_slug="planowiec")
+        if local_id:
+            user = User.query.get(local_id)
+            if user:
+                login_user(user)
+
+    @login_manager.unauthorized_handler
+    def _unauthorized():
+        from flask import request
+        return redirect(sso_client.login_url(request.path))
 
     # Blueprinty — wszystkie prefiksy URL po angielsku
     app.register_blueprint(auth_bp)

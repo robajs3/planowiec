@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, make_response
 from flask_login import login_user, logout_user, login_required, current_user
 
 from services.auth_service import AuthService
+import sso_client
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -51,6 +52,11 @@ def login():
 @auth_bp.route("/auth/logout")
 @login_required
 def logout():
+    # Wylogowanie musi być globalne (ze wszystkich appek naraz), więc oprócz
+    # lokalnej sesji Flask-Login czyścimy też ciasteczko SSO LoginHub —
+    # inaczej _sso_autologin zalogowałby z powrotem przy następnym żądaniu.
+    response = make_response(redirect(url_for("auth.login")))
+    sso_client.clear_sso_cookie(response)
     logout_user()
     flash("Wylogowano pomyślnie.", "info")
-    return redirect(url_for("auth.login"))
+    return response
