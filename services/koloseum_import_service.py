@@ -32,7 +32,7 @@ class KoloseumImportService:
 
     @staticmethod
     def _base_url() -> str:
-        return os.environ.get("KOLOSEUM_INTERNAL_URL", "http://host.docker.internal:5001").rstrip("/")
+        return os.environ.get("KOLOSEUM_INTERNAL_URL", "http://koloseum-web:5000").rstrip("/")
 
     @staticmethod
     def _api_key() -> str:
