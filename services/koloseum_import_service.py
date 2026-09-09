@@ -7,8 +7,8 @@ Mechanizm:
      samego ciasteczka SSO, którym planowiec już się loguje, tylko pyta hub
      o powiązanie z INNĄ appką niż ta, w której aktualnie jesteśmy.
   2. Pytamy koloseum bezpośrednio (nie przez hub) o listę egzaminów tego usera
-     — endpoint /koloseum/api/my-exams, autoryzowany współdzielonym SSO_SECRET
-     jako kluczem API (ten sam wzorzec co LoginHub /api/resolve).
+     — endpoint /api/my-exams (koloseum, bez prefiksu — patrz komentarz w
+     fetch_exams), autoryzowany współdzielonym SSO_SECRET jako kluczem API (ten sam wzorzec co LoginHub /api/resolve).
   3. Zaznaczone przez użytkownika egzaminy zapisujemy jako Activity, do
      własnego planu albo do planu wybranej grupy. Ponowny import TEGO SAMEGO
      egzaminu (rozpoznawanego po `external_ref = "koloseum:exam:<id>"`)
@@ -40,10 +40,18 @@ class KoloseumImportService:
 
     @staticmethod
     def fetch_exams(koloseum_user_id: int) -> tuple[list[dict] | None, str | None]:
-        """Pobiera listę egzaminów usera z koloseum. Zwraca (exams, błąd)."""
+        """Pobiera listę egzaminów usera z koloseum. Zwraca (exams, błąd).
+
+        UWAGA: wołamy koloseum bezpośrednio kontener-kontener (sso_net), nie
+        przez Tailscale — więc NIE doklejamy prefiksu /koloseum do ścieżki.
+        Ten prefiks istnieje tylko w routingu widzianym przez przeglądarkę
+        (Tailscale Serve --set-path go ściera zanim żądanie trafi do samego
+        Flaska koloseum — patrz PrefixMiddleware w koloseum/app.py). Trasy
+        wewnątrz appki, w tym /api/my-exams, są zarejestrowane BEZ prefiksu.
+        """
         try:
             resp = requests.get(
-                f"{KoloseumImportService._base_url()}/koloseum/api/my-exams",
+                f"{KoloseumImportService._base_url()}/api/my-exams",
                 params={"user_id": koloseum_user_id},
                 headers={"X-SSO-Api-Key": KoloseumImportService._api_key()},
                 timeout=5,
