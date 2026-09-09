@@ -1,3 +1,5 @@
+import secrets
+
 from flask import Flask, render_template, redirect, url_for
 from flask_login import LoginManager, current_user, login_user
 
@@ -6,6 +8,38 @@ from models import db, User
 from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp
 from services.activity_service import ActivityService
 import sso_client
+
+
+def _create_planowiec_user(hub_username: str):
+    """Zakłada w Planowcu nowe lokalne konto dla usera z LoginHub, który
+    jeszcze nie miał tu żadnego konta (wywoływane przez
+    sso_client.resolve_or_create_local_user przy pierwszej wizycie).
+    Hasło jest losowe i nieznane nikomu — logowanie idzie wyłącznie przez SSO.
+    get-or-create po username, żeby nie tworzyć duplikatu przy ewentualnym
+    powtórnym wywołaniu (np. gdy zgłoszenie do Huba nie doszło za pierwszym razem).
+    """
+    existing = User.query.filter_by(username=hub_username).first()
+    if existing:
+        return existing.id, existing.username
+
+    username = hub_username
+    suffix = 1
+    while User.query.filter_by(username=username).first():
+        suffix += 1
+        username = f"{hub_username}{suffix}"
+
+    # email jest w Planowcu wymagany i unikalny, a Hub go nie zna —
+    # generujemy placeholder, user może go później zmienić w profilu.
+    email = f"{username}@sso.local"
+    while User.query.filter_by(email=email).first():
+        suffix += 1
+        email = f"{hub_username}{suffix}@sso.local"
+
+    user = User(username=username, email=email, display_name=hub_username)
+    user.set_password(secrets.token_urlsafe(24))
+    db.session.add(user)
+    db.session.commit()
+    return user.id, user.username
 
 
 def create_app(config_class=Config) -> Flask:
@@ -27,15 +61,19 @@ def create_app(config_class=Config) -> Flask:
 
     # --- SSO (LoginHub) ---------------------------------------------------
     # Jeśli user nie jest zalogowany lokalnie, sprawdź czy ma ważne ciasteczko
-    # LoginHub i czy jego konto jest połączone z planowcem. Jeśli tak — zaloguj
-    # go lokalnie (login_user), tak jakby przeszedł przez /auth/login. Zwykłe
-    # logowanie hasłem (/auth/login, /auth/register) zostaje bez zmian jako
-    # plan B — SSO tylko "podszywa się" pod normalne zalogowanie.
+    # LoginHub. Jeśli jego konto jest już połączone z planowcem — zaloguj go
+    # lokalnie (login_user). Jeśli NIE jest jeszcze połączone —
+    # resolve_or_create_local_user samo zakłada tu dla niego nowe konto
+    # (_create_planowiec_user) i zgłasza połączenie do Huba, więc nie trzeba
+    # czekać na ręczne sparowanie kont w panelu /admin Huba. Zwykłe logowanie
+    # hasłem (/auth/login, /auth/register) zostaje bez zmian jako plan B.
     @app.before_request
     def _sso_autologin():
         if current_user.is_authenticated:
             return
-        local_id = sso_client.resolve_local_user_id(app_slug="planowiec")
+        local_id = sso_client.resolve_or_create_local_user(
+            app_slug="planowiec", create_user=_create_planowiec_user
+        )
         if local_id:
             user = User.query.get(local_id)
             if user:
