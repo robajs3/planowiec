@@ -82,6 +82,11 @@ class Activity(db.Model):
     # wygenerowanych z jednego formularza (pozwala usunąć/rozpoznać "całą serię").
     recurrence_id = db.Column(db.String(36), nullable=True, index=True)
 
+    # Referencja do rekordu w zewnętrznej appce, z którego wpis pochodzi
+    # (np. "koloseum:exam:42") — pozwala przy ponownym imporcie znaleźć i
+    # nadpisać ten sam wpis zamiast tworzyć duplikat.
+    external_ref = db.Column(db.String(120), nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

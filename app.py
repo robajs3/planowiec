@@ -3,7 +3,7 @@ from flask_login import LoginManager, current_user, login_user
 
 from config import Config
 from models import db, User
-from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp
+from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp
 from services.activity_service import ActivityService
 import sso_client
 
@@ -60,6 +60,7 @@ def create_app(config_class=Config) -> Flask:
     app.register_blueprint(groups_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(import_bp)
 
     @app.route("/")
     def root():
@@ -98,7 +99,7 @@ def _ensure_new_columns(app: Flask) -> None:
     additions = {
         "users": [("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE")],
         "activity_types": [("group_id", "INTEGER")],
-        "activities": [("recurrence_id", "VARCHAR(36)")],
+        "activities": [("recurrence_id", "VARCHAR(36)"), ("external_ref", "VARCHAR(120)")],
         "plan_access": [("role", "VARCHAR(20) NOT NULL DEFAULT 'viewer'")],
     }
 

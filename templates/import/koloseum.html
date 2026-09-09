@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Import z koloseum · Planowiec{% endblock %}
+{% block page_title %}Import z koloseum{% endblock %}
+
+{% block content %}
+
+{% if not linked %}
+<div class="card" style="max-width:560px;">
+  <div class="card-body">
+    <h3 style="margin-top:0;">Konto koloseum nie jest połączone</h3>
+    <p style="color:var(--text-muted);">
+      Żeby zaimportować egzaminy z koloseum, Twoje konto w koloseum musi być
+      powiązane z tym samym kontem LoginHub, co planowiec. Zaloguj się do
+      koloseum, sprawdź w LoginHub czy oba konta są połączone, i wróć tutaj.
+    </p>
+  </div>
+</div>
+
+{% else %}
+
+<form method="POST" action="{{ url_for('import_koloseum.do_import') }}">
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-body">
+      <h3 style="margin-top:0;">Dokąd zaimportować?</h3>
+      <div class="form-group" style="display:flex; gap:24px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="radio" name="target" value="own" checked onchange="document.getElementById('group-select-wrap').style.display='none'">
+          Własny plan
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="radio" name="target" value="group" {% if not groups %}disabled{% endif %} onchange="document.getElementById('group-select-wrap').style.display='block'">
+          Plan grupy
+        </label>
+      </div>
+
+      <div id="group-select-wrap" style="display:none; margin-top:12px;">
+        {% if groups %}
+        <select class="form-control" name="group_id">
+          {% for g in groups %}
+          <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-hint">Widoczne tylko grupy, w których masz uprawnienia do edycji planu.</div>
+        {% else %}
+        <div class="form-hint">Nie należysz do żadnej grupy, w której możesz edytować plan.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if not exams %}
+  <div class="card">
+    <div class="card-body">
+      <p style="color:var(--text-muted); margin:0;">Brak egzaminów do zaimportowania — koloseum nie zwróciło żadnych wyników.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0;">Egzaminy w koloseum ({{ exams|length }})</h3>
+        <div style="display:flex; gap:12px; font-size:.82rem;">
+          <a href="#" onclick="document.querySelectorAll('.exam-check').forEach(c=>c.checked=true); return false;">Zaznacz wszystkie</a>
+          <a href="#" onclick="document.querySelectorAll('.exam-check').forEach(c=>c.checked=false); return false;">Odznacz wszystkie</a>
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:32px;"></th>
+            <th>Tytuł</th>
+            <th>Przedmiot</th>
+            <th>Data</th>
+            <th>Miejsce</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exam in exams %}
+          <tr>
+            <td>
+              <input class="exam-check" type="checkbox" name="exam_ids" value="{{ exam.id }}"
+                     {% if ('koloseum:exam:' ~ exam.id) in already %}checked{% endif %}>
+            </td>
+            <td>
+              {{ exam.title }}
+              {% if ('koloseum:exam:' ~ exam.id) in already %}
+              <span class="nav-badge" title="Ten egzamin był już zaimportowany do Twojego własnego planu — ponowny import nadpisze wpis">już w planie</span>
+              {% endif %}
+            </td>
+            <td>{{ exam.subject }}</td>
+            <td>{{ exam.exam_date[:16].replace('T', ' ') }}</td>
+            <td>{{ exam.location or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="form-hint" style="margin-top:8px;">
+        Znacznik "już w planie" dotyczy tylko własnego planu — nie sprawdzamy
+        go dla planów grupowych. Ponowny import tego samego egzaminu zawsze
+        nadpisuje istniejący wpis nowymi danymi z koloseum.
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="margin-top:16px;">Importuj zaznaczone</button>
+    </div>
+  </div>
+  {% endif %}
+</form>
+
+{% endif %}
+
+{% endblock %}
