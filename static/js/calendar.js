@@ -45,6 +45,7 @@
   let editingActivityId = null;
   let dayMarkers = [];
   let dayMarkerAssignments = new Map(); // "YYYY-MM-DD" -> {marker_id, name, color}
+  let activeMarkerIds = null; // null = wszystkie widoczne (jeszcze nie tykane); Set() = filtr aktywny
   let markMode = false; // tryb "Oznacz dni": klik w dzień otwiera wybór znacznika zamiast listy aktywności
 
   // Efektywny kontekst edycji aktualnie otwartej aktywności w modalu — w widoku
@@ -256,7 +257,8 @@
       // ---- Kolorowa ramka dnia wg przypisanego "znacznika dnia" (legenda) ----
       // Całkowicie niezależne od aktywności/typów — patrz #day-markers-bar.
       const marker = dayMarkerAssignments.get(toDateKey(dayDate));
-      if (marker) {
+      const markerVisible = marker && (!activeMarkerIds || activeMarkerIds.has(marker.marker_id));
+      if (markerVisible) {
         dayCell.style.borderColor = marker.color;
         dayCell.style.borderWidth = "3px";
         dayCell.classList.add("day-marked");
@@ -376,9 +378,25 @@
     dayMarkersBar.innerHTML = "";
 
     dayMarkers.forEach((m) => {
-      const chip = document.createElement("span");
-      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; font-size:.78rem; color:var(--text-muted);";
-      chip.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${m.color}; display:inline-block;"></span>${escapeHtml(m.name)}`;
+      const active = !activeMarkerIds || activeMarkerIds.has(m.id);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "type-filter" + (active ? " active" : "");
+      chip.style.background = active ? m.color : "";
+      chip.style.borderColor = active ? m.color : "";
+      chip.title = active ? "Kliknij, aby ukryć podświetlenie tego znacznika w kalendarzu" : "Kliknij, aby pokazać podświetlenie tego znacznika w kalendarzu";
+      chip.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${active ? "#fff" : m.color}; display:inline-block;"></span>${escapeHtml(m.name)}`;
+      chip.addEventListener("click", () => {
+        // pierwsze kliknięcie: zamień "wszystko widoczne" na jawny zbiór
+        // wszystkich znaczników MINUS ten kliknięty
+        if (!activeMarkerIds) {
+          activeMarkerIds = new Set(dayMarkers.map((x) => x.id));
+        }
+        if (activeMarkerIds.has(m.id)) activeMarkerIds.delete(m.id);
+        else activeMarkerIds.add(m.id);
+        renderDayMarkersBar();
+        renderGrid();
+      });
       dayMarkersBar.appendChild(chip);
     });
 
