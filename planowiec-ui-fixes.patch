@@ -1,0 +1,35 @@
+diff --git a/static/css/app.css b/static/css/app.css
+index 1bd3b49..f4300b2 100644
+--- a/static/css/app.css
++++ b/static/css/app.css
+@@ -84,7 +84,7 @@ body {
+ a { color: var(--primary); text-decoration: none; }
+ a:hover { color: var(--primary-hover); }
+ ul { list-style: none; }
+-button { font-family: inherit; cursor: pointer; }
++button { font-family: inherit; cursor: pointer; color: inherit; }
+ input, select, textarea { font-family: inherit; }
+ 
+ /* ===== LAYOUT ===== */
+diff --git a/templates/import/koloseum.html b/templates/import/koloseum.html
+index fc4d18e..c2bf9be 100644
+--- a/templates/import/koloseum.html
++++ b/templates/import/koloseum.html
+@@ -65,7 +65,8 @@
+         </div>
+       </div>
+ 
+-      <table class="table">
++      <div class="table-wrap">
++      <table class="data-table">
+         <thead>
+           <tr>
+             <th style="width:32px;"></th>
+@@ -95,6 +96,7 @@
+           {% endfor %}
+         </tbody>
+       </table>
++      </div>
+ 
+       <div class="form-hint" style="margin-top:8px;">
+         Znacznik "już w planie" dotyczy tylko własnego planu — nie sprawdzamy
