@@ -1,6 +1,6 @@
 import secrets
 
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, send_from_directory, jsonify
 from flask_login import LoginManager, current_user, login_user
 
 from config import Config
@@ -103,6 +103,46 @@ def create_app(config_class=Config) -> Flask:
     @app.route("/")
     def root():
         return redirect(url_for("dashboard.index"))
+
+    # Service Worker — musi być serwowany z roota (nie z /static/js/...),
+    # żeby jego scope obejmował całą appkę, w tym ewentualny PREFIX
+    # (patrz PrefixMiddleware niżej). Bez tego nagłówka przeglądarka
+    # ograniczyłaby scope tylko do /static/js/.
+    @app.route("/sw.js")
+    def service_worker():
+        response = send_from_directory("static/js", "sw.js")
+        response.headers["Service-Worker-Allowed"] = "/"
+        return response
+
+    # Web App Manifest — generowany dynamicznie, bo start_url/scope MUSZĄ
+    # być bezwzględnymi ścieżkami widzianymi przez przeglądarkę (z ewentualnym
+    # prefiksem, np. /planowiec pod Tailscale Serve --set-path), inaczej
+    # instalacja jako PWA się nie powiedzie. Statyczny plik nie mógłby
+    # zawrzeć PREFIX bez przebudowy przy każdej zmianie konfiguracji.
+    @app.route("/manifest.json")
+    def web_app_manifest():
+        prefix = (app.config.get("PREFIX") or "").rstrip("/")
+        manifest = {
+            "name": "Planowiec",
+            "short_name": "Planowiec",
+            "description": "Planuj czas z przyjaciółmi — kalendarz osobisty, znajomi i grupy.",
+            "start_url": f"{prefix}/",
+            "scope": f"{prefix}/",
+            "display": "standalone",
+            "orientation": "portrait-primary",
+            "background_color": "#0f172a",
+            "theme_color": "#2563eb",
+            "icons": [
+                {"src": f"{prefix}/static/img/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any"},
+                {"src": f"{prefix}/static/img/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any"},
+                {"src": f"{prefix}/static/img/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
+                {"src": f"{prefix}/static/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+                {"src": f"{prefix}/static/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            ],
+        }
+        response = jsonify(manifest)
+        response.headers["Content-Type"] = "application/manifest+json"
+        return response
 
     # Obsługa błędów
     @app.errorhandler(403)

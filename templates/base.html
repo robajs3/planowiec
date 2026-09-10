@@ -7,6 +7,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+
+  <!-- PWA: manifest + ikony, żeby appkę dało się zainstalować z ekranu
+       głównego (Android/desktop Chrome) lub "Dodaj do ekranu początkowego"
+       (iOS Safari). -->
+  <link rel="manifest" href="{{ url_for('web_app_manifest') }}">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/icon-180.png') }}">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Planowiec">
+
   <script>
     // Prefiks URL, pod jakim zamontowana jest aplikacja (np. "/planowiec"
     // gdy wystawiona przez Tailscale Serve pod ścieżką inną niż "/").
