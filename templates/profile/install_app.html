@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Zainstaluj aplikację — Planowiec{% endblock %}
+{% block page_title %}Zainstaluj aplikację{% endblock %}
+
+{% block content %}
+<div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+
+  <div class="card">
+    <div class="card-body">
+      <p style="font-size:.88rem;color:var(--text-muted)">
+        Planowca możesz zainstalować jak normalną aplikację — dostaniesz ikonę na ekranie
+        głównym / w szufladzie aplikacji, a appka otworzy się bez paska adresu przeglądarki,
+        jak natywna aplikacja.
+      </p>
+    </div>
+  </div>
+
+  <!-- WEB / PC -->
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="emoji">🖥️</span> Komputer (Chrome / Edge)</h3>
+    </div>
+    <div class="card-body">
+      <div class="install-steps">
+
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-body">
+            <p>Kliknij ikonę <strong>trzech kropek (⋮)</strong> w prawym górnym rogu okna przeglądarki.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-body">
+            <p>Najedź na <strong>„Przesyłaj, zapisuj, udostępniaj”</strong>.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 2 — „Przesyłaj, zapisuj, udostępniaj”
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-body">
+            <p>Z rozwiniętego podmenu wybierz <strong>„Zainstaluj: Planowiec”</strong>.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ANDROID -->
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="emoji">🤖</span> Android (Chrome)</h3>
+    </div>
+    <div class="card-body">
+      <div class="install-steps">
+
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-body">
+            <p>Dotknij ikony <strong>trzech kropek (⋮)</strong> w prawym górnym rogu ekranu.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-body">
+            <p>Z menu wybierz <strong>„Zainstaluj aplikację”</strong> (na niektórych telefonach schowane pod <strong>„Utwórz skrót”</strong>).</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 2 — „Zainstaluj aplikację” / „Utwórz skrót”
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-body">
+            <p>Potwierdź przyciskiem <strong>„Zainstaluj: Planowiec”</strong>. Ikona wyląduje na ekranie głównym / w szufladzie aplikacji.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- iOS -->
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="emoji">🍎</span> iPhone / iPad (Safari)</h3>
+    </div>
+    <div class="card-body">
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">
+        Musi być otwarte w <strong>Safari</strong> — Chrome na iOS nie ma opcji dodania do ekranu głównego.
+      </p>
+      <div class="install-steps">
+
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-body">
+            <p>Dotknij ikony <strong>trzech kropek (⋯)</strong> w prawym dolnym rogu ekranu (obok pola adresu).</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 1 — menu ⋯ (prawy dolny róg)
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-body">
+            <p>Wybierz <strong>„Udostępnij”</strong> ⬆️.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 2 — „Udostępnij”
+            </div>
+          </div>
+        </div>
+
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-body">
+            <p>Z listy opcji wybierz <strong>„Do ekranu głównego”</strong> i potwierdź <strong>„Dodaj”</strong> w prawym górnym rogu.</p>
+            <div class="screenshot-placeholder">
+              <span class="emoji">📷</span>
+              Miejsce na screenshot<br>Krok 3 — „Do ekranu głównego”
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,245 @@
+diff --git a/controllers/profile_controller.py b/controllers/profile_controller.py
+index 2438278..9caf968 100644
+--- a/controllers/profile_controller.py
++++ b/controllers/profile_controller.py
+@@ -17,6 +17,12 @@ def index():
+     return render_template("profile/profile.html", palette=AVATAR_PALETTE)
+ 
+ 
++@profile_bp.route("/pomoc/instalacja")
++@login_required
++def install_app():
++    return render_template("profile/install_app.html")
++
++
+ @profile_bp.route("/profile/update", methods=["POST"])
+ @login_required
+ def update():
+diff --git a/static/css/app.css b/static/css/app.css
+index f4300b2..0853c27 100644
+--- a/static/css/app.css
++++ b/static/css/app.css
+@@ -162,6 +162,26 @@ input, select, textarea { font-family: inherit; }
+ .card-header h2, .card-header h3 { font-size: 1.02rem; font-weight: 700; }
+ .card-body { padding: 20px; }
+ 
++/* ===== INSTALL GUIDE (PWA) ===== */
++.install-steps { display: flex; flex-direction: column; gap: 16px; }
++.install-step { display: flex; gap: 14px; align-items: flex-start; }
++.install-step-num {
++  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
++  background: var(--primary); color: #fff; font-weight: 700; font-size: .85rem;
++  display: flex; align-items: center; justify-content: center;
++}
++.install-step-body { flex: 1; }
++.install-step-body p { font-size: .88rem; color: var(--text); margin-bottom: 8px; }
++
++.screenshot-placeholder {
++  width: 100%; max-width: 260px; aspect-ratio: 9 / 16;
++  border: 2px dashed var(--border); border-radius: var(--radius-sm);
++  background: var(--bg); display: flex; flex-direction: column;
++  align-items: center; justify-content: center; gap: 8px;
++  color: var(--text-muted); font-size: .78rem; text-align: center; padding: 12px;
++}
++.screenshot-placeholder .emoji { font-size: 1.6rem; opacity: .5; }
++
+ /* ===== BUTTONS ===== */
+ .btn {
+   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+diff --git a/templates/base.html b/templates/base.html
+index 5cb5873..239a24d 100644
+--- a/templates/base.html
++++ b/templates/base.html
+@@ -66,6 +66,9 @@
+         <a class="nav-item {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+           <span class="nav-icon">⚙️</span> Profil
+         </a>
++        <a class="nav-item {% if request.endpoint == 'profile.install_app' %}active{% endif %}" href="{{ url_for('profile.install_app') }}">
++          <span class="nav-icon">📲</span> Zainstaluj aplikację
++        </a>
+         {% if current_user.is_admin %}
+         <a class="nav-item {% if request.blueprint == 'admin' %}active{% endif %}" href="{{ url_for('admin.index') }}">
+           <span class="nav-icon">🛡️</span> Panel admina
+diff --git a/templates/profile/install_app.html b/templates/profile/install_app.html
+new file mode 100644
+index 0000000..0afc243
+--- /dev/null
++++ b/templates/profile/install_app.html
+@@ -0,0 +1,157 @@
++{% extends "base.html" %}
++{% block title %}Zainstaluj aplikację — Planowiec{% endblock %}
++{% block page_title %}Zainstaluj aplikację{% endblock %}
++
++{% block content %}
++<div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
++
++  <div class="card">
++    <div class="card-body">
++      <p style="font-size:.88rem;color:var(--text-muted)">
++        Planowca możesz zainstalować jak normalną aplikację — dostaniesz ikonę na ekranie
++        głównym / w szufladzie aplikacji, a appka otworzy się bez paska adresu przeglądarki,
++        jak natywna aplikacja.
++      </p>
++    </div>
++  </div>
++
++  <!-- WEB / PC -->
++  <div class="card">
++    <div class="card-header">
++      <h3><span class="emoji">🖥️</span> Komputer (Chrome / Edge)</h3>
++    </div>
++    <div class="card-body">
++      <div class="install-steps">
++
++        <div class="install-step">
++          <div class="install-step-num">1</div>
++          <div class="install-step-body">
++            <p>Kliknij ikonę <strong>trzech kropek (⋮)</strong> w prawym górnym rogu okna przeglądarki.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">2</div>
++          <div class="install-step-body">
++            <p>Najedź na <strong>„Przesyłaj, zapisuj, udostępniaj”</strong>.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 2 — „Przesyłaj, zapisuj, udostępniaj”
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">3</div>
++          <div class="install-step-body">
++            <p>Z rozwiniętego podmenu wybierz <strong>„Zainstaluj: Planowiec”</strong>.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
++            </div>
++          </div>
++        </div>
++
++      </div>
++    </div>
++  </div>
++
++  <!-- ANDROID -->
++  <div class="card">
++    <div class="card-header">
++      <h3><span class="emoji">🤖</span> Android (Chrome)</h3>
++    </div>
++    <div class="card-body">
++      <div class="install-steps">
++
++        <div class="install-step">
++          <div class="install-step-num">1</div>
++          <div class="install-step-body">
++            <p>Dotknij ikony <strong>trzech kropek (⋮)</strong> w prawym górnym rogu ekranu.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">2</div>
++          <div class="install-step-body">
++            <p>Z menu wybierz <strong>„Zainstaluj aplikację”</strong> (na niektórych telefonach schowane pod <strong>„Utwórz skrót”</strong>).</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 2 — „Zainstaluj aplikację” / „Utwórz skrót”
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">3</div>
++          <div class="install-step-body">
++            <p>Potwierdź przyciskiem <strong>„Zainstaluj: Planowiec”</strong>. Ikona wyląduje na ekranie głównym / w szufladzie aplikacji.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
++            </div>
++          </div>
++        </div>
++
++      </div>
++    </div>
++  </div>
++
++  <!-- iOS -->
++  <div class="card">
++    <div class="card-header">
++      <h3><span class="emoji">🍎</span> iPhone / iPad (Safari)</h3>
++    </div>
++    <div class="card-body">
++      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">
++        Musi być otwarte w <strong>Safari</strong> — Chrome na iOS nie ma opcji dodania do ekranu głównego.
++      </p>
++      <div class="install-steps">
++
++        <div class="install-step">
++          <div class="install-step-num">1</div>
++          <div class="install-step-body">
++            <p>Dotknij ikony <strong>trzech kropek (⋯)</strong> w prawym dolnym rogu ekranu (obok pola adresu).</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 1 — menu ⋯ (prawy dolny róg)
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">2</div>
++          <div class="install-step-body">
++            <p>Wybierz <strong>„Udostępnij”</strong> ⬆️.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 2 — „Udostępnij”
++            </div>
++          </div>
++        </div>
++
++        <div class="install-step">
++          <div class="install-step-num">3</div>
++          <div class="install-step-body">
++            <p>Z listy opcji wybierz <strong>„Do ekranu głównego”</strong> i potwierdź <strong>„Dodaj”</strong> w prawym górnym rogu.</p>
++            <div class="screenshot-placeholder">
++              <span class="emoji">📷</span>
++              Miejsce na screenshot<br>Krok 3 — „Do ekranu głównego”
++            </div>
++          </div>
++        </div>
++
++      </div>
++    </div>
++  </div>
++
++</div>
++{% endblock %}
+diff --git a/templates/profile/profile.html b/templates/profile/profile.html
+index ea96f3e..6892f4b 100644
+--- a/templates/profile/profile.html
++++ b/templates/profile/profile.html
+@@ -100,5 +100,15 @@
+     </div>
+   </div>
+ 
++  <div class="card">
++    <div class="card-header"><h3><span class="emoji">📲</span> Zainstaluj aplikację</h3></div>
++    <div class="card-body">
++      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:0">
++        Planowca możesz zainstalować na telefonie jak natywną aplikację.
++        <a href="{{ url_for('profile.install_app') }}">Zobacz instrukcję (Android + iOS)</a>.
++      </p>
++    </div>
++  </div>
++
+ </div>
+ {% endblock %}

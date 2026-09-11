@@ -17,6 +17,12 @@ def index():
     return render_template("profile/profile.html", palette=AVATAR_PALETTE)
 
 
+@profile_bp.route("/pomoc/instalacja")
+@login_required
+def install_app():
+    return render_template("profile/install_app.html")
+
+
 @profile_bp.route("/profile/update", methods=["POST"])
 @login_required
 def update():

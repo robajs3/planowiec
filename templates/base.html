@@ -66,6 +66,9 @@
         <a class="nav-item {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
           <span class="nav-icon">⚙️</span> Profil
         </a>
+        <a class="nav-item {% if request.endpoint == 'profile.install_app' %}active{% endif %}" href="{{ url_for('profile.install_app') }}">
+          <span class="nav-icon">📲</span> Zainstaluj aplikację
+        </a>
         {% if current_user.is_admin %}
         <a class="nav-item {% if request.blueprint == 'admin' %}active{% endif %}" href="{{ url_for('admin.index') }}">
           <span class="nav-icon">🛡️</span> Panel admina
