@@ -1,0 +1,399 @@
+# Patch: rozwijalne opcje instalacji PWA + fix podświetlania kafelków + URL po angielsku
+# Zastosuj z katalogu głównego repo: patch -p1 < planowiec-install-ui.patch
+
+diff -ruN a/controllers/profile_controller.py b/controllers/profile_controller.py
+--- a/controllers/profile_controller.py	2026-09-14 08:18:23.172505560 +0000
++++ b/controllers/profile_controller.py	2026-09-14 08:18:23.195148013 +0000
+@@ -18,7 +18,7 @@
+     return render_template("profile/profile.html", palette=AVATAR_PALETTE)
+ 
+ 
+-@profile_bp.route("/pomoc/instalacja")
++@profile_bp.route("/help/installation")
+ @login_required
+ def install_app():
+     return render_template("profile/install_app.html")
+diff -ruN a/static/css/app.css b/static/css/app.css
+--- a/static/css/app.css	2026-09-14 08:18:23.175601647 +0000
++++ b/static/css/app.css	2026-09-14 08:18:23.197635153 +0000
+@@ -182,6 +182,39 @@
+ }
+ .screenshot-placeholder .emoji { font-size: 1.6rem; opacity: .5; }
+ 
++.screenshot-shot {
++  width: 100%; max-width: 260px; aspect-ratio: 9 / 16;
++  border: 1px solid var(--border); border-radius: var(--radius-sm);
++  background: var(--bg); display: block;
++}
++
++/* ===== INSTALL GUIDE — ROZWIJALNE SEKCJE (accordion) =====
++   <details>/<summary> zamiast zwykłych .card: każda platforma (iOS/Android/
++   Chrome) domyślnie zwinięta. Zawartość zwiniętego <details> ma z automatu
++   display:none, więc obrazki .screenshot-shot (loading="lazy") w środku NIE
++   są pobierane, dopóki użytkownik nie rozwinie danej sekcji — czyli nie
++   ładują się wszystkie naraz, a lista opcji jest widoczna od razu. */
++.install-accordion-item {
++  background: var(--bg-card); border: 1px solid var(--border);
++  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
++}
++.install-accordion-item + .install-accordion-item { margin-top: 0; }
++.install-accordion-summary {
++  list-style: none; cursor: pointer; user-select: none;
++  padding: 16px 20px; display: flex; align-items: center;
++  justify-content: space-between; gap: 12px;
++}
++.install-accordion-summary::-webkit-details-marker { display: none; }
++.install-accordion-summary:hover { background: var(--bg); }
++.install-accordion-title { font-size: 1.02rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
++.install-accordion-chevron {
++  color: var(--text-muted); font-size: 1.1rem; line-height: 1;
++  transition: transform .2s ease; flex-shrink: 0;
++}
++.install-accordion-item[open] .install-accordion-summary { border-bottom: 1px solid var(--border); }
++.install-accordion-item[open] .install-accordion-chevron { transform: rotate(180deg); }
++.install-accordion-body { padding: 20px; }
++
+ /* ===== BUTTONS ===== */
+ .btn {
+   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+diff -ruN a/static/img/install-guide/android-step1.svg b/static/img/install-guide/android-step1.svg
+--- a/static/img/install-guide/android-step1.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/android-step1.svg	2026-09-14 08:18:23.210887006 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 1</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">menu ⋮</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">(prawy górny róg)</text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/android-step2.svg b/static/img/install-guide/android-step2.svg
+--- a/static/img/install-guide/android-step2.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/android-step2.svg	2026-09-14 08:18:23.210912132 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 2</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Zainstaluj aplikację”</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">/ „Utwórz skrót”</text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/android-step3.svg b/static/img/install-guide/android-step3.svg
+--- a/static/img/install-guide/android-step3.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/android-step3.svg	2026-09-14 08:18:23.210934956 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 3</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Zainstaluj: Planowiec”</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8"></text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/ios-step1.svg b/static/img/install-guide/ios-step1.svg
+--- a/static/img/install-guide/ios-step1.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/ios-step1.svg	2026-09-14 08:18:23.211185271 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 1</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">menu ⋯</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">(prawy dolny róg)</text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/ios-step2.svg b/static/img/install-guide/ios-step2.svg
+--- a/static/img/install-guide/ios-step2.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/ios-step2.svg	2026-09-14 08:18:23.211386075 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 2</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Udostępnij”</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8"></text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/ios-step3.svg b/static/img/install-guide/ios-step3.svg
+--- a/static/img/install-guide/ios-step3.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/ios-step3.svg	2026-09-14 08:18:23.211501946 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 3</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Do ekranu głównego”</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8"></text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/pc-step1.svg b/static/img/install-guide/pc-step1.svg
+--- a/static/img/install-guide/pc-step1.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/pc-step1.svg	2026-09-14 08:18:23.210795718 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 1</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">menu ⋮</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">(prawy górny róg)</text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/pc-step2.svg b/static/img/install-guide/pc-step2.svg
+--- a/static/img/install-guide/pc-step2.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/pc-step2.svg	2026-09-14 08:18:23.210834552 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 2</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Przesyłaj, zapisuj,</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">udostępniaj”</text>
++</svg>
+\ No newline at end of file
+diff -ruN a/static/img/install-guide/pc-step3.svg b/static/img/install-guide/pc-step3.svg
+--- a/static/img/install-guide/pc-step3.svg	1970-01-01 00:00:00.000000000 +0000
++++ b/static/img/install-guide/pc-step3.svg	2026-09-14 08:18:23.210858085 +0000
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
++  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
++  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
++  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
++  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 3</text>
++  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Zainstaluj: Planowiec”</text>
++  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8"></text>
++</svg>
+\ No newline at end of file
+diff -ruN a/templates/base.html b/templates/base.html
+--- a/templates/base.html	2026-09-14 08:18:23.191093760 +0000
++++ b/templates/base.html	2026-09-14 08:18:23.212495658 +0000
+@@ -70,7 +70,7 @@
+         <a class="nav-item {% if request.blueprint == 'import_koloseum' %}active{% endif %}" href="{{ url_for('import_koloseum.index') }}">
+           <span class="nav-icon">🏛️</span> Import z koloseum
+         </a>
+-        <a class="nav-item {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
++        <a class="nav-item {% if request.endpoint == 'profile.index' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+           <span class="nav-icon">⚙️</span> Profil
+         </a>
+         <a class="nav-item {% if request.endpoint == 'profile.install_app' %}active{% endif %}" href="{{ url_for('profile.install_app') }}">
+diff -ruN a/templates/profile/install_app.html b/templates/profile/install_app.html
+--- a/templates/profile/install_app.html	2026-09-14 08:18:23.192141297 +0000
++++ b/templates/profile/install_app.html	2026-09-14 08:18:23.213606622 +0000
+@@ -1,6 +1,6 @@
+ {% extends "base.html" %}
+-{% block title %}Zainstaluj aplikację — Planowiec{% endblock %}
+-{% block page_title %}Zainstaluj aplikację{% endblock %}
++{% block title %}Install the app — Planowiec{% endblock %}
++{% block page_title %}Install the app{% endblock %}
+ 
+ {% block content %}
+ <div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+@@ -8,150 +8,131 @@
+   <div class="card">
+     <div class="card-body">
+       <p style="font-size:.88rem;color:var(--text-muted)">
+-        Planowca możesz zainstalować jak normalną aplikację — dostaniesz ikonę na ekranie
+-        głównym / w szufladzie aplikacji, a appka otworzy się bez paska adresu przeglądarki,
+-        jak natywna aplikacja.
++        You can install Planowiec like a regular app — you'll get an icon on your
++        home screen / app drawer, and the app will open without the browser's
++        address bar, just like a native app. Pick your platform below.
+       </p>
+     </div>
+   </div>
+ 
+-  <!-- WEB / PC -->
+-  <div class="card">
+-    <div class="card-header">
+-      <h3><span class="emoji">🖥️</span> Komputer (Chrome / Edge)</h3>
+-    </div>
+-    <div class="card-body">
++  <!-- Każda platforma to osobny <details>, domyślnie zwinięty. Zdjęcia w
++       środku mają loading="lazy": dopóki sekcja jest zwinięta, przeglądarka
++       renderuje jej zawartość z display:none i NIE zleca pobrania obrazków —
++       ściągają się dopiero, gdy użytkownik faktycznie rozwinie daną opcję. -->
++
++  <!-- PC / Chrome & Edge -->
++  <details class="install-accordion-item">
++    <summary class="install-accordion-summary">
++      <span class="install-accordion-title"><span class="emoji">🖥️</span> Computer (Chrome / Edge)</span>
++      <span class="install-accordion-chevron">⌄</span>
++    </summary>
++    <div class="install-accordion-body">
+       <div class="install-steps">
+ 
+         <div class="install-step">
+           <div class="install-step-num">1</div>
+           <div class="install-step-body">
+-            <p>Kliknij ikonę <strong>trzech kropek (⋮)</strong> w prawym górnym rogu okna przeglądarki.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
+-            </div>
++            <p>Click the <strong>three-dot icon (⋮)</strong> in the top-right corner of the browser window.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step1.svg') }}" alt="Step 1 — ⋮ menu (top-right corner)" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">2</div>
+           <div class="install-step-body">
+-            <p>Najedź na <strong>„Przesyłaj, zapisuj, udostępniaj”</strong>.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 2 — „Przesyłaj, zapisuj, udostępniaj”
+-            </div>
++            <p>Hover over <strong>"Cast, save, and share"</strong>.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step2.svg') }}" alt="Step 2 — 'Cast, save, and share'" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">3</div>
+           <div class="install-step-body">
+-            <p>Z rozwiniętego podmenu wybierz <strong>„Zainstaluj: Planowiec”</strong>.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
+-            </div>
++            <p>From the submenu, choose <strong>"Install Planowiec"</strong>.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step3.svg') }}" alt="Step 3 — 'Install Planowiec'" width="260" height="462">
+           </div>
+         </div>
+ 
+       </div>
+     </div>
+-  </div>
++  </details>
+ 
+   <!-- ANDROID -->
+-  <div class="card">
+-    <div class="card-header">
+-      <h3><span class="emoji">🤖</span> Android (Chrome)</h3>
+-    </div>
+-    <div class="card-body">
++  <details class="install-accordion-item">
++    <summary class="install-accordion-summary">
++      <span class="install-accordion-title"><span class="emoji">🤖</span> Android (Chrome)</span>
++      <span class="install-accordion-chevron">⌄</span>
++    </summary>
++    <div class="install-accordion-body">
+       <div class="install-steps">
+ 
+         <div class="install-step">
+           <div class="install-step-num">1</div>
+           <div class="install-step-body">
+-            <p>Dotknij ikony <strong>trzech kropek (⋮)</strong> w prawym górnym rogu ekranu.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 1 — menu ⋮ (prawy górny róg)
+-            </div>
++            <p>Tap the <strong>three-dot icon (⋮)</strong> in the top-right corner of the screen.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step1.svg') }}" alt="Step 1 — ⋮ menu (top-right corner)" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">2</div>
+           <div class="install-step-body">
+-            <p>Z menu wybierz <strong>„Zainstaluj aplikację”</strong> (na niektórych telefonach schowane pod <strong>„Utwórz skrót”</strong>).</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 2 — „Zainstaluj aplikację” / „Utwórz skrót”
+-            </div>
++            <p>From the menu, choose <strong>"Install app"</strong> (on some phones it's under <strong>"Add to Home screen"</strong>).</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step2.svg') }}" alt="Step 2 — 'Install app' / 'Add to Home screen'" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">3</div>
+           <div class="install-step-body">
+-            <p>Potwierdź przyciskiem <strong>„Zainstaluj: Planowiec”</strong>. Ikona wyląduje na ekranie głównym / w szufladzie aplikacji.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 3 — „Zainstaluj: Planowiec”
+-            </div>
++            <p>Confirm with <strong>"Install Planowiec"</strong>. The icon will land on your home screen / app drawer.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step3.svg') }}" alt="Step 3 — 'Install Planowiec'" width="260" height="462">
+           </div>
+         </div>
+ 
+       </div>
+     </div>
+-  </div>
++  </details>
+ 
+   <!-- iOS -->
+-  <div class="card">
+-    <div class="card-header">
+-      <h3><span class="emoji">🍎</span> iPhone / iPad (Safari)</h3>
+-    </div>
+-    <div class="card-body">
++  <details class="install-accordion-item">
++    <summary class="install-accordion-summary">
++      <span class="install-accordion-title"><span class="emoji">🍎</span> iPhone / iPad (Safari)</span>
++      <span class="install-accordion-chevron">⌄</span>
++    </summary>
++    <div class="install-accordion-body">
+       <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">
+-        Musi być otwarte w <strong>Safari</strong> — Chrome na iOS nie ma opcji dodania do ekranu głównego.
++        Must be opened in <strong>Safari</strong> — Chrome on iOS doesn't have the option to add to the home screen.
+       </p>
+       <div class="install-steps">
+ 
+         <div class="install-step">
+           <div class="install-step-num">1</div>
+           <div class="install-step-body">
+-            <p>Dotknij ikony <strong>trzech kropek (⋯)</strong> w prawym dolnym rogu ekranu (obok pola adresu).</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 1 — menu ⋯ (prawy dolny róg)
+-            </div>
++            <p>Tap the <strong>three-dot icon (⋯)</strong> in the bottom-right corner of the screen (next to the address bar).</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step1.svg') }}" alt="Step 1 — ⋯ menu (bottom-right corner)" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">2</div>
+           <div class="install-step-body">
+-            <p>Wybierz <strong>„Udostępnij”</strong> ⬆️.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 2 — „Udostępnij”
+-            </div>
++            <p>Choose <strong>"Share"</strong> ⬆️.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step2.svg') }}" alt="Step 2 — 'Share'" width="260" height="462">
+           </div>
+         </div>
+ 
+         <div class="install-step">
+           <div class="install-step-num">3</div>
+           <div class="install-step-body">
+-            <p>Z listy opcji wybierz <strong>„Do ekranu głównego”</strong> i potwierdź <strong>„Dodaj”</strong> w prawym górnym rogu.</p>
+-            <div class="screenshot-placeholder">
+-              <span class="emoji">📷</span>
+-              Miejsce na screenshot<br>Krok 3 — „Do ekranu głównego”
+-            </div>
++            <p>From the option list, choose <strong>"Add to Home Screen"</strong> and confirm with <strong>"Add"</strong> in the top-right corner.</p>
++            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step3.svg') }}" alt="Step 3 — 'Add to Home Screen'" width="260" height="462">
+           </div>
+         </div>
+ 
+       </div>
+     </div>
+-  </div>
++  </details>
+ 
+ </div>
+ {% endblock %}

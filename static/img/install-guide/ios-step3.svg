@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 462" width="260" height="462">
+  <rect width="260" height="462" rx="14" fill="#0f172a" opacity="0.04"/>
+  <rect x="2" y="2" width="256" height="458" rx="12" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="130" y="205" font-size="34" text-anchor="middle" opacity="0.5">📷</text>
+  <text x="130" y="245" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#64748b">Krok 3</text>
+  <text x="130" y="268" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8">„Do ekranu głównego”</text>
+  <text x="130" y="286" font-family="Inter, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#94a3b8"></text>
+</svg>

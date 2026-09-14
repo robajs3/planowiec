@@ -70,7 +70,7 @@
         <a class="nav-item {% if request.blueprint == 'import_koloseum' %}active{% endif %}" href="{{ url_for('import_koloseum.index') }}">
           <span class="nav-icon">🏛️</span> Import z koloseum
         </a>
-        <a class="nav-item {% if request.blueprint == 'profile' %}active{% endif %}" href="{{ url_for('profile.index') }}">
+        <a class="nav-item {% if request.endpoint == 'profile.index' %}active{% endif %}" href="{{ url_for('profile.index') }}">
           <span class="nav-icon">⚙️</span> Profil
         </a>
         <a class="nav-item {% if request.endpoint == 'profile.install_app' %}active{% endif %}" href="{{ url_for('profile.install_app') }}">

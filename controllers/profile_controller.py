@@ -18,7 +18,7 @@ def index():
     return render_template("profile/profile.html", palette=AVATAR_PALETTE)
 
 
-@profile_bp.route("/pomoc/instalacja")
+@profile_bp.route("/help/installation")
 @login_required
 def install_app():
     return render_template("profile/install_app.html")

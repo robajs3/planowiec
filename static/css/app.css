@@ -182,6 +182,39 @@ input, select, textarea { font-family: inherit; }
 }
 .screenshot-placeholder .emoji { font-size: 1.6rem; opacity: .5; }
 
+.screenshot-shot {
+  width: 100%; max-width: 260px; aspect-ratio: 9 / 16;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); display: block;
+}
+
+/* ===== INSTALL GUIDE — ROZWIJALNE SEKCJE (accordion) =====
+   <details>/<summary> zamiast zwykłych .card: każda platforma (iOS/Android/
+   Chrome) domyślnie zwinięta. Zawartość zwiniętego <details> ma z automatu
+   display:none, więc obrazki .screenshot-shot (loading="lazy") w środku NIE
+   są pobierane, dopóki użytkownik nie rozwinie danej sekcji — czyli nie
+   ładują się wszystkie naraz, a lista opcji jest widoczna od razu. */
+.install-accordion-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+.install-accordion-item + .install-accordion-item { margin-top: 0; }
+.install-accordion-summary {
+  list-style: none; cursor: pointer; user-select: none;
+  padding: 16px 20px; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px;
+}
+.install-accordion-summary::-webkit-details-marker { display: none; }
+.install-accordion-summary:hover { background: var(--bg); }
+.install-accordion-title { font-size: 1.02rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.install-accordion-chevron {
+  color: var(--text-muted); font-size: 1.1rem; line-height: 1;
+  transition: transform .2s ease; flex-shrink: 0;
+}
+.install-accordion-item[open] .install-accordion-summary { border-bottom: 1px solid var(--border); }
+.install-accordion-item[open] .install-accordion-chevron { transform: rotate(180deg); }
+.install-accordion-body { padding: 20px; }
+
 /* ===== BUTTONS ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
