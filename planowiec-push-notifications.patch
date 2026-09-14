@@ -1,0 +1,686 @@
+diff --git a/app.py b/app.py
+index 6825bec..3786232 100644
+--- a/app.py
++++ b/app.py
+@@ -7,6 +7,7 @@ from config import Config
+ from models import db, User
+ from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp
+ from services.activity_service import ActivityService
++from services.reminder_scheduler import start_reminder_scheduler
+ import sso_client
+ 
+ 
+@@ -175,9 +176,17 @@ def _ensure_new_columns(app: Flask) -> None:
+     existing_tables = set(inspector.get_table_names())
+ 
+     additions = {
+-        "users": [("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE")],
++        "users": [
++            ("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE"),
++            ("push_subscription", "TEXT"),
++        ],
+         "activity_types": [("group_id", "INTEGER")],
+-        "activities": [("recurrence_id", "VARCHAR(36)"), ("external_ref", "VARCHAR(120)")],
++        "activities": [
++            ("recurrence_id", "VARCHAR(36)"),
++            ("external_ref", "VARCHAR(120)"),
++            ("notify_before_minutes", "INTEGER"),
++            ("reminder_sent_at", "TIMESTAMP"),
++        ],
+         "plan_access": [("role", "VARCHAR(20) NOT NULL DEFAULT 'viewer'")],
+     }
+ 
+@@ -196,6 +205,7 @@ def init_db(app: Flask) -> None:
+         db.create_all()
+         _ensure_new_columns(app)
+         ActivityService.ensure_default_types()
++    start_reminder_scheduler(app)
+ 
+ 
+ def create_wsgi_app(config_class=Config):
+diff --git a/config.py b/config.py
+index 4729e5e..320a864 100644
+--- a/config.py
++++ b/config.py
+@@ -26,3 +26,8 @@ class Config:
+     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+ 
+     PREFIX = os.getenv("PREFIX", "")
++
++    # Web Push (VAPID) — powiadomienia push o zbliżających się aktywnościach.
++    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
++    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
++    VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "admin@planowiec.local")
+diff --git a/controllers/profile_controller.py b/controllers/profile_controller.py
+index 9caf968..7328e5f 100644
+--- a/controllers/profile_controller.py
++++ b/controllers/profile_controller.py
+@@ -1,10 +1,11 @@
+-from flask import Blueprint, render_template, request, redirect, url_for, flash
++from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+ from flask_login import login_required, current_user
+ 
+ import re
+ 
+ from models import db, User
+ from models.user_model import AVATAR_PALETTE
++from services.notification_service import NotificationService
+ 
+ profile_bp = Blueprint("profile", __name__)
+ 
+@@ -23,6 +24,29 @@ def install_app():
+     return render_template("profile/install_app.html")
+ 
+ 
++@profile_bp.route("/profile/vapid-public-key")
++@login_required
++def vapid_public_key():
++    return jsonify({"publicKey": current_app.config.get("VAPID_PUBLIC_KEY", "")})
++
++
++@profile_bp.route("/profile/push-subscribe", methods=["POST"])
++@login_required
++def push_subscribe():
++    data = request.get_json(force=True, silent=True) or {}
++    if not data.get("endpoint"):
++        return jsonify({"error": "Nieprawidłowa subskrypcja."}), 400
++    NotificationService.save_subscription(current_user, data)
++    return jsonify({"ok": True})
++
++
++@profile_bp.route("/profile/push-unsubscribe", methods=["POST"])
++@login_required
++def push_unsubscribe():
++    NotificationService.clear_subscription(current_user)
++    return jsonify({"ok": True})
++
++
+ @profile_bp.route("/profile/update", methods=["POST"])
+ @login_required
+ def update():
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 13f7ac7..95076a6 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -42,6 +42,11 @@ services:
+       # więc łączymy się po nazwie kontenera (koloseum-web), tak samo jak
+       # z hub-web — bez kombinowania z host.docker.internal.
+       KOLOSEUM_INTERNAL_URL: ${KOLOSEUM_INTERNAL_URL:-http://koloseum-web:5000}
++      # Web Push (VAPID) — przypomnienia o aktywnościach. Wygeneruj parę
++      # kluczy komendą z instrukcji i wklej tutaj/do .env.
++      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
++      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
++      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL:-admin@planowiec.local}
+     ports:
+       # Zmapowane na localhost — Tailscale Serve wskazuje właśnie na ten port.
+       - "${APP_PORT:-5000}:5000"
+diff --git a/models/activity_model.py b/models/activity_model.py
+index 5a86202..9c9e351 100644
+--- a/models/activity_model.py
++++ b/models/activity_model.py
+@@ -87,6 +87,15 @@ class Activity(db.Model):
+     # nadpisać ten sam wpis zamiast tworzyć duplikat.
+     external_ref = db.Column(db.String(120), nullable=True, index=True)
+ 
++    # Przypomnienie push X minut przed startem. NULL = wyłączone (checkbox
++    # odznaczony). `reminder_sent_at` znaczy moment realnego wysłania —
++    # służy jako zabezpieczenie przed podwójnym wysłaniem (patrz
++    # ReminderScheduler.claim_due_activity) i jest zerowane przy zmianie
++    # godziny startu albo samego ustawienia przypomnienia, żeby po edycji
++    # przypomnienie odpaliło się ponownie w nowym terminie.
++    notify_before_minutes = db.Column(db.Integer, nullable=True)
++    reminder_sent_at = db.Column(db.DateTime, nullable=True)
++
+     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+ 
+@@ -117,6 +126,7 @@ class Activity(db.Model):
+             "owner": self.owner.to_public_dict() if self.owner else None,
+             "group_id": self.group_id,
+             "recurrence_id": self.recurrence_id,
++            "notify_before_minutes": self.notify_before_minutes,
+             "comment_count": len(self.comments) if self.comments is not None else 0,
+         }
+         if source is not None:
+@@ -145,7 +155,15 @@ class ActivityComment(db.Model):
+         return {
+             "id": self.id,
+             "content": self.content,
+-            "created_at": self.created_at.isoformat(),
++            # UWAGA: created_at to prawdziwy UTC (datetime.utcnow()), w
++            # przeciwieństwie do start_time/end_time aktywności (te trzymają
++            # "naiwny" czas lokalny wpisany wprost z <input type="datetime-local">).
++            # isoformat() bez dopisanego "Z" dawał string bez znacznika strefy —
++            # JS `new Date(...)` interpretuje wtedy taki string jako czas
++            # LOKALNY, więc pokazywał godzinę o 2h wcześniejszą niż realna
++            # (Polska latem = UTC+2). Dopisanie "Z" jednoznacznie mówi
++            # przeglądarce "to jest UTC", więc poprawnie przelicza na lokalny.
++            "created_at": self.created_at.isoformat() + "Z",
+             "author": self.author.to_public_dict() if self.author else None,
+         }
+ 
+diff --git a/models/user_model.py b/models/user_model.py
+index 15df515..9c0d50c 100644
+--- a/models/user_model.py
++++ b/models/user_model.py
+@@ -30,6 +30,11 @@ class User(UserMixin, db.Model):
+     # jest wtedy tylko własny, prywatny plan (zachowanie sprzed tej opcji).
+     show_all_plans = db.Column(db.Boolean, default=False, nullable=False)
+ 
++    # Web Push (VAPID) — subskrypcja zapisana jako JSON (endpoint + klucze),
++    # dokładnie to, co zwraca przeglądarkowe pushManager.subscribe(). NULL,
++    # gdy użytkownik nigdy nie włączył powiadomień push (albo je wyłączył).
++    push_subscription = db.Column(db.Text, nullable=True)
++
+     activities = db.relationship(
+         "Activity", back_populates="owner", cascade="all, delete-orphan",
+         foreign_keys="Activity.owner_id",
+diff --git a/requirements.txt b/requirements.txt
+index b22a214..b83b9eb 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -6,3 +6,5 @@ Werkzeug>=3.0.0
+ python-dotenv>=1.0.0
+ email-validator>=2.1.0
+ requests>=2.31.0
++pywebpush>=2.0.0
++APScheduler>=3.10.0
+diff --git a/services/activity_service.py b/services/activity_service.py
+index 0f27210..5f3ac83 100644
+--- a/services/activity_service.py
++++ b/services/activity_service.py
+@@ -224,6 +224,13 @@ class ActivityService:
+         if recurrence_rule not in ALL_RECURRENCES:
+             recurrence_rule = RECURRENCE_NONE
+ 
++        # None = przypomnienie wyłączone (checkbox odznaczony w formularzu).
++        notify_before_minutes = data.get("notify_before_minutes")
++        try:
++            notify_before_minutes = int(notify_before_minutes) if notify_before_minutes else None
++        except (TypeError, ValueError):
++            notify_before_minutes = None
++
+         occurrences = [(start, end)]
+         recurrence_id = None
+ 
+@@ -279,6 +286,7 @@ class ActivityService:
+                 owner_id=owner_id,
+                 group_id=group_id,
+                 recurrence_id=recurrence_id,
++                notify_before_minutes=notify_before_minutes,
+             )
+             db.session.add(activity)
+             created.append(activity)
+@@ -308,6 +316,21 @@ class ActivityService:
+         activity.title = title
+         activity.description = (data.get("description") or "").strip()
+         activity.location = (data.get("location") or "").strip()
++
++        # Przypomnienie push: jeśli zmienia się godzina startu albo samo
++        # ustawienie "ile minut przed", zerujemy reminder_sent_at — inaczej
++        # przesunięcie już-przypomnianej aktywności na później nigdy by nie
++        # wysłało nowego przypomnienia (zostałoby oznaczone jako "wysłane"
++        # ze starego terminu).
++        notify_before_minutes = data.get("notify_before_minutes")
++        try:
++            notify_before_minutes = int(notify_before_minutes) if notify_before_minutes else None
++        except (TypeError, ValueError):
++            notify_before_minutes = None
++        if start != activity.start_time or notify_before_minutes != activity.notify_before_minutes:
++            activity.reminder_sent_at = None
++        activity.notify_before_minutes = notify_before_minutes
++
+         activity.start_time = start
+         activity.end_time = end
+         activity.all_day = bool(data.get("all_day"))
+diff --git a/services/notification_service.py b/services/notification_service.py
+new file mode 100644
+index 0000000..b0e58b1
+--- /dev/null
++++ b/services/notification_service.py
+@@ -0,0 +1,86 @@
++"""
++Web Push (VAPID) — powiadomienia o zbliżających się aktywnościach.
++
++Ten plik odpowiada TYLKO za zapisywanie subskrypcji i wysyłkę pojedynczego
++powiadomienia. O tym, KIEDY wysłać (sprawdzanie czasu, zapobieganie
++podwójnej wysyłce) odpowiada services/reminder_scheduler.py.
++"""
++import json
++
++from flask import current_app
++from pywebpush import webpush, WebPushException
++
++from models import db
++
++
++class NotificationService:
++
++    @staticmethod
++    def save_subscription(user, subscription_info: dict) -> None:
++        user.push_subscription = json.dumps(subscription_info)
++        db.session.commit()
++
++    @staticmethod
++    def clear_subscription(user) -> None:
++        user.push_subscription = None
++        db.session.commit()
++
++    @staticmethod
++    def send_push(user, title: str, body: str, link: str | None = None) -> bool:
++        """Wysyła pojedyncze powiadomienie push do danego usera.
++        Zwraca True, jeśli faktycznie wysłano (user miał aktywną subskrypcję
++        i serwer push ją zaakceptował)."""
++        if not user or not user.push_subscription:
++            return False
++
++        vapid_private = current_app.config.get("VAPID_PRIVATE_KEY")
++        vapid_public = current_app.config.get("VAPID_PUBLIC_KEY")
++        if not vapid_private or not vapid_public:
++            current_app.logger.warning("Push pominięty — brak VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY w konfiguracji.")
++            return False
++
++        try:
++            subscription_info = json.loads(user.push_subscription)
++        except (TypeError, ValueError):
++            NotificationService.clear_subscription(user)
++            return False
++
++        prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
++        vapid_claims = {"sub": f"mailto:{current_app.config.get('VAPID_CLAIMS_EMAIL', 'admin@planowiec.local')}"}
++
++        try:
++            webpush(
++                subscription_info=subscription_info,
++                data=json.dumps({"title": title, "body": body, "link": link or f"{prefix}/"}),
++                vapid_private_key=vapid_private,
++                vapid_claims=vapid_claims,
++            )
++            return True
++        except WebPushException as e:
++            status = getattr(e.response, "status_code", None)
++            if status in (404, 410):
++                # Subskrypcja wygasła / przeglądarka ją unregisterowała —
++                # czyścimy, żeby nie próbować przy każdym kolejnym przypomnieniu.
++                NotificationService.clear_subscription(user)
++            current_app.logger.warning(f"Push notification failed for user {user.id}: {e}")
++            return False
++        except Exception as e:
++            current_app.logger.warning(f"Push notification failed for user {user.id}: {e}")
++            return False
++
++    @staticmethod
++    def send_activity_reminder(activity) -> bool:
++        """Wysyła przypomnienie o konkretnej aktywności do jej właściciela
++        (tylko plany prywatne — group_id is None; aktywności grupowe nie
++        mają jednego właściciela do powiadomienia, patrz reminder_scheduler)."""
++        if not activity.owner_id or activity.group_id is not None:
++            return False
++        prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
++        when = activity.start_time.strftime("%H:%M")
++        body = f"{when}" + (f" — {activity.location}" if activity.location else "")
++        return NotificationService.send_push(
++            user=activity.owner,
++            title=f"⏰ {activity.title}",
++            body=body,
++            link=f"{prefix}/dashboard/",
++        )
+diff --git a/services/reminder_scheduler.py b/services/reminder_scheduler.py
+new file mode 100644
+index 0000000..eb411a7
+--- /dev/null
++++ b/services/reminder_scheduler.py
+@@ -0,0 +1,87 @@
++"""
++Sprawdza co minutę, którym aktywnościom nadszedł czas przypomnienia push,
++i wysyła je.
++
++WAŻNE — bezpieczeństwo przy wielu procesach gunicorna: appka startuje z
++`--workers 3`, więc ten scheduler faktycznie działa w 3 osobnych procesach
++naraz, każdy sprawdzając tę samą bazę co minutę. Żeby nie wysłać tego
++samego przypomnienia 3 razy, "zajęcie" aktywności do wysyłki robimy jednym
++atomowym UPDATE z warunkiem `WHERE reminder_sent_at IS NULL` — tylko JEDEN
++z procesów wygra ten wyścig (dostanie rowcount=1), reszta dostanie 0 i
++pominie tę aktywność. To działa niezależnie od liczby workerów/schedulerów.
++"""
++from datetime import datetime, timedelta
++
++from apscheduler.schedulers.background import BackgroundScheduler
++from sqlalchemy import text
++
++from models import db, Activity
++from services.notification_service import NotificationService
++
++CHECK_INTERVAL_SECONDS = 60
++
++
++def _claim_activity(activity_id: int) -> bool:
++    """Atomowo oznacza aktywność jako 'przypomnienie wysłane'. Zwraca True
++    tylko temu procesowi, który faktycznie wygrał wyścig o wysyłkę."""
++    result = db.session.execute(
++        text(
++            "UPDATE activities SET reminder_sent_at = :now "
++            "WHERE id = :id AND reminder_sent_at IS NULL"
++        ),
++        {"now": datetime.utcnow(), "id": activity_id},
++    )
++    db.session.commit()
++    return result.rowcount > 0
++
++
++def _check_and_send_due_reminders(app):
++    with app.app_context():
++        # Naiwny czas lokalny (patrz komentarz w Activity.start_time) — cały
++        # projekt konsekwentnie trzyma start_time jako "wall clock", więc
++        # tutaj też porównujemy z naiwnym "teraz", a nie z UTC.
++        now = datetime.now()
++
++        # Okno wyszukiwania: aktywności, których termin przypomnienia
++        # (start_time - notify_before_minutes) już nadszedł, ale sama
++        # aktywność jeszcze się nie zaczęła (nie ma sensu przypominać o
++        # czymś, co już trwa/minęło — np. po dłuższym przestoju appki).
++        candidates = (
++            Activity.query
++            .filter(
++                Activity.notify_before_minutes.isnot(None),
++                Activity.reminder_sent_at.is_(None),
++                Activity.group_id.is_(None),  # patrz NotificationService.send_activity_reminder
++                Activity.start_time > now,
++            )
++            .all()
++        )
++
++        for activity in candidates:
++            trigger_at = activity.start_time - timedelta(minutes=activity.notify_before_minutes)
++            if now < trigger_at:
++                continue  # jeszcze nie pora
++            if not _claim_activity(activity.id):
++                continue  # inny worker już to wysyła/wysłał
++            try:
++                NotificationService.send_activity_reminder(activity)
++            except Exception:
++                app.logger.exception(f"Nie udało się wysłać przypomnienia dla aktywności {activity.id}")
++
++
++def start_reminder_scheduler(app):
++    """Startuje scheduler w tle. Bezpieczne do wywołania w każdym workerze
++    gunicorna — patrz komentarz o atomowym _claim_activity wyżej."""
++    scheduler = BackgroundScheduler(daemon=True)
++    scheduler.add_job(
++        _check_and_send_due_reminders,
++        "interval",
++        seconds=CHECK_INTERVAL_SECONDS,
++        args=[app],
++        id="activity_reminders",
++        replace_existing=True,
++        max_instances=1,
++        coalesce=True,
++    )
++    scheduler.start()
++    return scheduler
+diff --git a/static/js/app.js b/static/js/app.js
+index 1a0d20b..23f413d 100644
+--- a/static/js/app.js
++++ b/static/js/app.js
+@@ -46,9 +46,105 @@ document.addEventListener("DOMContentLoaded", () => {
+ // warunków, które przeglądarka sprawdza, zanim pokaże opcję "Zainstaluj
+ // aplikację" — obok manifestu, ikon i podania po HTTPS.
+ function registerServiceWorker() {
+-  if (!("serviceWorker" in navigator)) return;
++  if (!("serviceWorker" in navigator)) return Promise.resolve(null);
+   const prefix = window.APP_URL_PREFIX || "";
+-  navigator.serviceWorker
++  return navigator.serviceWorker
+     .register(prefix + "/sw.js", { scope: prefix + "/" })
+-    .catch((e) => console.warn("Rejestracja Service Workera nie powiodła się:", e));
++    .catch((e) => {
++      console.warn("Rejestracja Service Workera nie powiodła się:", e);
++      return null;
++    });
++}
++
++// Prosty toast, w tym samym stylu co flashe z Flaska (.flash-container/.alert),
++// żeby feedback z włączania powiadomień wyglądał tak samo jak reszta appki.
++function showToast(message, category = "info") {
++  const container = document.querySelector(".flash-container");
++  if (!container) { alert(message); return; }
++  const el = document.createElement("div");
++  el.className = `alert alert-${category}`;
++  el.textContent = message;
++  container.appendChild(el);
++  setTimeout(() => {
++    el.style.transition = "opacity .3s ease";
++    el.style.opacity = "0";
++    setTimeout(() => el.remove(), 300);
++  }, 4500);
++}
++
++function urlBase64ToUint8Array(base64String) {
++  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
++  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
++  const rawData = window.atob(base64);
++  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
++}
++
++function isIosSafari() {
++  const ua = window.navigator.userAgent;
++  const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
++  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
++  return isIos && isSafari;
++}
++
++function isStandalonePwa() {
++  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
++}
++
++// Włączenie powiadomień push — wywoływane z przycisku w /profile. Prośba o
++// zgodę (Notification.requestPermission) MUSI być odpowiedzią na gest
++// użytkownika, inaczej przeglądarki ją blokują — dlatego to osobna funkcja,
++// a nie coś odpalane automatycznie przy ładowaniu strony.
++async function setupPushNotifications() {
++  const prefix = window.APP_URL_PREFIX || "";
++  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
++    if (isIosSafari() && !isStandalonePwa()) {
++      showToast("Na iPhone/iPad: najpierw dodaj Planowca do ekranu głównego (Udostępnij → Dodaj do ekranu początkowego), potem otwórz appkę z ikony i włącz powiadomienia.", "info");
++    } else {
++      showToast("Ta przeglądarka nie wspiera powiadomień push.", "warning");
++    }
++    return;
++  }
++  try {
++    const reg = await registerServiceWorker();
++    if (!reg) {
++      showToast("Nie udało się zarejestrować Service Workera.", "danger");
++      return;
++    }
++    await navigator.serviceWorker.ready;
++
++    const r = await fetch(prefix + "/profile/vapid-public-key");
++    const { publicKey } = await r.json();
++    if (!publicKey) {
++      showToast("Serwer nie ma skonfigurowanego VAPID_PUBLIC_KEY.", "danger");
++      return;
++    }
++
++    const perm = await Notification.requestPermission();
++    if (perm !== "granted") {
++      showToast("Nie zgodziłeś się na powiadomienia — nie mogę ich włączyć.", "warning");
++      return;
++    }
++
++    let sub = await reg.pushManager.getSubscription();
++    if (!sub) {
++      sub = await reg.pushManager.subscribe({
++        userVisibleOnly: true,
++        applicationServerKey: urlBase64ToUint8Array(publicKey),
++      });
++    }
++
++    const resp = await fetch(prefix + "/profile/push-subscribe", {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify(sub),
++    });
++    if (resp.ok) {
++      showToast("Powiadomienia push włączone!", "success");
++    } else {
++      showToast("Serwer odrzucił subskrypcję push.", "danger");
++    }
++  } catch (e) {
++    console.warn("Push setup failed:", e);
++    showToast("Nie udało się włączyć powiadomień push.", "danger");
++  }
+ }
+diff --git a/static/js/calendar.js b/static/js/calendar.js
+index 66ffe75..8dc68a8 100644
+--- a/static/js/calendar.js
++++ b/static/js/calendar.js
+@@ -691,6 +691,13 @@
+   const actCommentFormRow = document.getElementById("activity-comment-form-row");
+   const actCommentInput = document.getElementById("activity-comment-input");
+   const actCommentSendBtn = document.getElementById("activity-comment-send");
++  const actNotifyEnabled = document.getElementById("activity-notify-enabled");
++  const actNotifyMinutesRow = document.getElementById("activity-notify-minutes-row");
++  const actNotifyMinutes = document.getElementById("activity-notify-minutes");
++
++  actNotifyEnabled.addEventListener("change", () => {
++    actNotifyMinutesRow.style.display = actNotifyEnabled.checked ? "block" : "none";
++  });
+ 
+   let editingActivity = null; // pełny obiekt aktualnie edytowanej/przeglądanej aktywności
+ 
+@@ -815,6 +822,23 @@
+     document.getElementById("activity-location").value = activity ? activity.location : "";
+     document.getElementById("activity-all-day").checked = activity ? activity.all_day : false;
+ 
++    // Przypomnienia push mają sens tylko dla planu z JEDNYM właścicielem
++    // (własny/znajomego) — plan grupy nie ma jednej osoby do powiadomienia,
++    // więc dla group_id ukrywamy całą opcję zamiast pokazywać coś, co i tak
++    // nigdy się nie wyśle (patrz NotificationService.send_activity_reminder).
++    const notifyRow = actNotifyEnabled.closest(".form-group");
++    if (editCtx.context === "group") {
++      notifyRow.style.display = "none";
++      actNotifyMinutesRow.style.display = "none";
++      actNotifyEnabled.checked = false;
++    } else {
++      notifyRow.style.display = "flex";
++      const minutes = activity ? activity.notify_before_minutes : null;
++      actNotifyEnabled.checked = !!minutes;
++      actNotifyMinutesRow.style.display = minutes ? "block" : "none";
++      if (minutes) actNotifyMinutes.value = String(minutes);
++    }
++
+     let startDate = activity ? new Date(activity.start) : (presetDate ? new Date(presetDate) : new Date());
+     let endDate = activity ? new Date(activity.end) : new Date(startDate.getTime() + 60 * 60 * 1000);
+     if (!activity && presetDate) {
+@@ -876,6 +900,7 @@
+       description: document.getElementById("activity-description").value,
+       location: document.getElementById("activity-location").value,
+       all_day: document.getElementById("activity-all-day").checked,
++      notify_before_minutes: actNotifyEnabled.checked ? parseInt(actNotifyMinutes.value, 10) : null,
+       start: document.getElementById("activity-start").value,
+       end: document.getElementById("activity-end").value,
+       activity_type_id: parseInt(actTypeSelect.value, 10),
+diff --git a/static/js/sw.js b/static/js/sw.js
+index 9eb7833..614bc3a 100644
+--- a/static/js/sw.js
++++ b/static/js/sw.js
+@@ -22,3 +22,42 @@ self.addEventListener("install", function (event) {
+ self.addEventListener("activate", function (event) {
+   event.waitUntil(self.clients.claim());
+ });
++
++// ---- Push notifications ----
++// Ścieżki liczymy z self.registration.scope (a nie hardkodujemy "/..."),
++// bo ten plik nie przechodzi przez Jinja i nie zna window.APP_URL_PREFIX —
++// patrz komentarz wyżej.
++function scopeUrl(path) {
++  return new URL(path, self.registration.scope).href;
++}
++
++self.addEventListener("push", function (event) {
++  let data = { title: "Planowiec", body: "Masz nowe powiadomienie.", link: self.registration.scope };
++  try {
++    const parsed = event.data.json();
++    data = { ...data, ...parsed };
++  } catch {
++    try { data.body = event.data.text(); } catch {}
++  }
++  event.waitUntil(
++    self.registration.showNotification(data.title, {
++      body: data.body,
++      icon: scopeUrl("static/img/icon-192.png"),
++      badge: scopeUrl("static/img/icon-72.png"),
++      data: { link: data.link || self.registration.scope },
++    })
++  );
++});
++
++self.addEventListener("notificationclick", function (event) {
++  event.notification.close();
++  const link = event.notification.data?.link || self.registration.scope;
++  event.waitUntil(
++    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
++      for (const client of clientList) {
++        if (client.url === link && "focus" in client) return client.focus();
++      }
++      if (clients.openWindow) return clients.openWindow(link);
++    })
++  );
++});
+diff --git a/templates/dashboard/index.html b/templates/dashboard/index.html
+index 62cd2f8..475f326 100644
+--- a/templates/dashboard/index.html
++++ b/templates/dashboard/index.html
+@@ -128,6 +128,21 @@
+           <input type="checkbox" id="activity-all-day">
+           <label for="activity-all-day" style="font-size:.85rem;">Cały dzień</label>
+         </div>
++        <div class="form-group checkbox-row">
++          <input type="checkbox" id="activity-notify-enabled">
++          <label for="activity-notify-enabled" style="font-size:.85rem;">🔔 Powiadom przed aktywnością</label>
++        </div>
++        <div class="form-group" id="activity-notify-minutes-row" style="display:none;">
++          <label class="form-label" for="activity-notify-minutes">Ile wcześniej</label>
++          <select class="form-control" id="activity-notify-minutes">
++            <option value="5">5 minut</option>
++            <option value="15">15 minut</option>
++            <option value="30" selected>30 minut</option>
++            <option value="60">1 godzinę</option>
++            <option value="120">2 godziny</option>
++            <option value="1440">1 dzień</option>
++          </select>
++        </div>
+         <div class="form-group">
+           <label class="form-label" for="activity-location">Lokalizacja</label>
+           <input class="form-control" type="text" id="activity-location">
+diff --git a/templates/profile/profile.html b/templates/profile/profile.html
+index 6892f4b..23e4cb7 100644
+--- a/templates/profile/profile.html
++++ b/templates/profile/profile.html
+@@ -100,6 +100,25 @@
+     </div>
+   </div>
+ 
++  <div class="card">
++    <div class="card-header"><h3>🔔 Powiadomienia push</h3></div>
++    <div class="card-body">
++      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
++        Włącz, żeby dostawać przypomnienia o aktywnościach, przy których zaznaczysz
++        „Powiadom przed aktywnością” — nawet gdy Planowiec jest zamknięty.
++      </p>
++      <button type="button" class="btn btn-primary" onclick="setupPushNotifications()">
++        Włącz powiadomienia push
++      </button>
++      <p class="list-item-sub" style="font-size:.78rem;margin-top:8px">
++        Na iPhonie/iPadzie: otwórz tę stronę w Safari, dotknij ikony Udostępnij →
++        „Dodaj do ekranu początkowego”, a dopiero potem włącz powiadomienia z appki
++        uruchomionej z tej ikony (bez tego iOS w ogóle nie pozwala na Web Push).
++        Pełna instrukcja instalacji: <a href="{{ url_for('profile.install_app') }}">zobacz tutaj</a>.
++      </p>
++    </div>
++  </div>
++
+   <div class="card">
+     <div class="card-header"><h3><span class="emoji">📲</span> Zainstaluj aplikację</h3></div>
+     <div class="card-body">

@@ -42,6 +42,11 @@ services:
       # więc łączymy się po nazwie kontenera (koloseum-web), tak samo jak
       # z hub-web — bez kombinowania z host.docker.internal.
       KOLOSEUM_INTERNAL_URL: ${KOLOSEUM_INTERNAL_URL:-http://koloseum-web:5000}
+      # Web Push (VAPID) — przypomnienia o aktywnościach. Wygeneruj parę
+      # kluczy komendą z instrukcji i wklej tutaj/do .env.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL:-admin@planowiec.local}
     ports:
       # Zmapowane na localhost — Tailscale Serve wskazuje właśnie na ten port.
       - "${APP_PORT:-5000}:5000"

@@ -7,6 +7,7 @@ from config import Config
 from models import db, User
 from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp
 from services.activity_service import ActivityService
+from services.reminder_scheduler import start_reminder_scheduler
 import sso_client
 
 
@@ -175,9 +176,17 @@ def _ensure_new_columns(app: Flask) -> None:
     existing_tables = set(inspector.get_table_names())
 
     additions = {
-        "users": [("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE")],
+        "users": [
+            ("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("push_subscription", "TEXT"),
+        ],
         "activity_types": [("group_id", "INTEGER")],
-        "activities": [("recurrence_id", "VARCHAR(36)"), ("external_ref", "VARCHAR(120)")],
+        "activities": [
+            ("recurrence_id", "VARCHAR(36)"),
+            ("external_ref", "VARCHAR(120)"),
+            ("notify_before_minutes", "INTEGER"),
+            ("reminder_sent_at", "TIMESTAMP"),
+        ],
         "plan_access": [("role", "VARCHAR(20) NOT NULL DEFAULT 'viewer'")],
     }
 
@@ -196,6 +205,7 @@ def init_db(app: Flask) -> None:
         db.create_all()
         _ensure_new_columns(app)
         ActivityService.ensure_default_types()
+    start_reminder_scheduler(app)
 
 
 def create_wsgi_app(config_class=Config):

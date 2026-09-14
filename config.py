@@ -26,3 +26,8 @@ class Config:
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
 
     PREFIX = os.getenv("PREFIX", "")
+
+    # Web Push (VAPID) — powiadomienia push o zbliżających się aktywnościach.
+    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+    VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "admin@planowiec.local")

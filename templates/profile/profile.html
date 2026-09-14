@@ -101,6 +101,25 @@
   </div>
 
   <div class="card">
+    <div class="card-header"><h3>🔔 Powiadomienia push</h3></div>
+    <div class="card-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+        Włącz, żeby dostawać przypomnienia o aktywnościach, przy których zaznaczysz
+        „Powiadom przed aktywnością” — nawet gdy Planowiec jest zamknięty.
+      </p>
+      <button type="button" class="btn btn-primary" onclick="setupPushNotifications()">
+        Włącz powiadomienia push
+      </button>
+      <p class="list-item-sub" style="font-size:.78rem;margin-top:8px">
+        Na iPhonie/iPadzie: otwórz tę stronę w Safari, dotknij ikony Udostępnij →
+        „Dodaj do ekranu początkowego”, a dopiero potem włącz powiadomienia z appki
+        uruchomionej z tej ikony (bez tego iOS w ogóle nie pozwala na Web Push).
+        Pełna instrukcja instalacji: <a href="{{ url_for('profile.install_app') }}">zobacz tutaj</a>.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-header"><h3><span class="emoji">📲</span> Zainstaluj aplikację</h3></div>
     <div class="card-body">
       <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:0">

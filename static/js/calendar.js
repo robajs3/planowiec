@@ -691,6 +691,13 @@
   const actCommentFormRow = document.getElementById("activity-comment-form-row");
   const actCommentInput = document.getElementById("activity-comment-input");
   const actCommentSendBtn = document.getElementById("activity-comment-send");
+  const actNotifyEnabled = document.getElementById("activity-notify-enabled");
+  const actNotifyMinutesRow = document.getElementById("activity-notify-minutes-row");
+  const actNotifyMinutes = document.getElementById("activity-notify-minutes");
+
+  actNotifyEnabled.addEventListener("change", () => {
+    actNotifyMinutesRow.style.display = actNotifyEnabled.checked ? "block" : "none";
+  });
 
   let editingActivity = null; // pełny obiekt aktualnie edytowanej/przeglądanej aktywności
 
@@ -815,6 +822,23 @@
     document.getElementById("activity-location").value = activity ? activity.location : "";
     document.getElementById("activity-all-day").checked = activity ? activity.all_day : false;
 
+    // Przypomnienia push mają sens tylko dla planu z JEDNYM właścicielem
+    // (własny/znajomego) — plan grupy nie ma jednej osoby do powiadomienia,
+    // więc dla group_id ukrywamy całą opcję zamiast pokazywać coś, co i tak
+    // nigdy się nie wyśle (patrz NotificationService.send_activity_reminder).
+    const notifyRow = actNotifyEnabled.closest(".form-group");
+    if (editCtx.context === "group") {
+      notifyRow.style.display = "none";
+      actNotifyMinutesRow.style.display = "none";
+      actNotifyEnabled.checked = false;
+    } else {
+      notifyRow.style.display = "flex";
+      const minutes = activity ? activity.notify_before_minutes : null;
+      actNotifyEnabled.checked = !!minutes;
+      actNotifyMinutesRow.style.display = minutes ? "block" : "none";
+      if (minutes) actNotifyMinutes.value = String(minutes);
+    }
+
     let startDate = activity ? new Date(activity.start) : (presetDate ? new Date(presetDate) : new Date());
     let endDate = activity ? new Date(activity.end) : new Date(startDate.getTime() + 60 * 60 * 1000);
     if (!activity && presetDate) {
@@ -876,6 +900,7 @@
       description: document.getElementById("activity-description").value,
       location: document.getElementById("activity-location").value,
       all_day: document.getElementById("activity-all-day").checked,
+      notify_before_minutes: actNotifyEnabled.checked ? parseInt(actNotifyMinutes.value, 10) : null,
       start: document.getElementById("activity-start").value,
       end: document.getElementById("activity-end").value,
       activity_type_id: parseInt(actTypeSelect.value, 10),

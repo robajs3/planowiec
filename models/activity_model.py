@@ -87,6 +87,15 @@ class Activity(db.Model):
     # nadpisać ten sam wpis zamiast tworzyć duplikat.
     external_ref = db.Column(db.String(120), nullable=True, index=True)
 
+    # Przypomnienie push X minut przed startem. NULL = wyłączone (checkbox
+    # odznaczony). `reminder_sent_at` znaczy moment realnego wysłania —
+    # służy jako zabezpieczenie przed podwójnym wysłaniem (patrz
+    # ReminderScheduler.claim_due_activity) i jest zerowane przy zmianie
+    # godziny startu albo samego ustawienia przypomnienia, żeby po edycji
+    # przypomnienie odpaliło się ponownie w nowym terminie.
+    notify_before_minutes = db.Column(db.Integer, nullable=True)
+    reminder_sent_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -117,6 +126,7 @@ class Activity(db.Model):
             "owner": self.owner.to_public_dict() if self.owner else None,
             "group_id": self.group_id,
             "recurrence_id": self.recurrence_id,
+            "notify_before_minutes": self.notify_before_minutes,
             "comment_count": len(self.comments) if self.comments is not None else 0,
         }
         if source is not None:
@@ -145,7 +155,15 @@ class ActivityComment(db.Model):
         return {
             "id": self.id,
             "content": self.content,
-            "created_at": self.created_at.isoformat(),
+            # UWAGA: created_at to prawdziwy UTC (datetime.utcnow()), w
+            # przeciwieństwie do start_time/end_time aktywności (te trzymają
+            # "naiwny" czas lokalny wpisany wprost z <input type="datetime-local">).
+            # isoformat() bez dopisanego "Z" dawał string bez znacznika strefy —
+            # JS `new Date(...)` interpretuje wtedy taki string jako czas
+            # LOKALNY, więc pokazywał godzinę o 2h wcześniejszą niż realna
+            # (Polska latem = UTC+2). Dopisanie "Z" jednoznacznie mówi
+            # przeglądarce "to jest UTC", więc poprawnie przelicza na lokalny.
+            "created_at": self.created_at.isoformat() + "Z",
             "author": self.author.to_public_dict() if self.author else None,
         }
 

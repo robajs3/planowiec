@@ -224,6 +224,13 @@ class ActivityService:
         if recurrence_rule not in ALL_RECURRENCES:
             recurrence_rule = RECURRENCE_NONE
 
+        # None = przypomnienie wyłączone (checkbox odznaczony w formularzu).
+        notify_before_minutes = data.get("notify_before_minutes")
+        try:
+            notify_before_minutes = int(notify_before_minutes) if notify_before_minutes else None
+        except (TypeError, ValueError):
+            notify_before_minutes = None
+
         occurrences = [(start, end)]
         recurrence_id = None
 
@@ -279,6 +286,7 @@ class ActivityService:
                 owner_id=owner_id,
                 group_id=group_id,
                 recurrence_id=recurrence_id,
+                notify_before_minutes=notify_before_minutes,
             )
             db.session.add(activity)
             created.append(activity)
@@ -308,6 +316,21 @@ class ActivityService:
         activity.title = title
         activity.description = (data.get("description") or "").strip()
         activity.location = (data.get("location") or "").strip()
+
+        # Przypomnienie push: jeśli zmienia się godzina startu albo samo
+        # ustawienie "ile minut przed", zerujemy reminder_sent_at — inaczej
+        # przesunięcie już-przypomnianej aktywności na później nigdy by nie
+        # wysłało nowego przypomnienia (zostałoby oznaczone jako "wysłane"
+        # ze starego terminu).
+        notify_before_minutes = data.get("notify_before_minutes")
+        try:
+            notify_before_minutes = int(notify_before_minutes) if notify_before_minutes else None
+        except (TypeError, ValueError):
+            notify_before_minutes = None
+        if start != activity.start_time or notify_before_minutes != activity.notify_before_minutes:
+            activity.reminder_sent_at = None
+        activity.notify_before_minutes = notify_before_minutes
+
         activity.start_time = start
         activity.end_time = end
         activity.all_day = bool(data.get("all_day"))

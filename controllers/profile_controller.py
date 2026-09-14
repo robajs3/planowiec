@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 
 import re
 
 from models import db, User
 from models.user_model import AVATAR_PALETTE
+from services.notification_service import NotificationService
 
 profile_bp = Blueprint("profile", __name__)
 
@@ -21,6 +22,29 @@ def index():
 @login_required
 def install_app():
     return render_template("profile/install_app.html")
+
+
+@profile_bp.route("/profile/vapid-public-key")
+@login_required
+def vapid_public_key():
+    return jsonify({"publicKey": current_app.config.get("VAPID_PUBLIC_KEY", "")})
+
+
+@profile_bp.route("/profile/push-subscribe", methods=["POST"])
+@login_required
+def push_subscribe():
+    data = request.get_json(force=True, silent=True) or {}
+    if not data.get("endpoint"):
+        return jsonify({"error": "Nieprawidłowa subskrypcja."}), 400
+    NotificationService.save_subscription(current_user, data)
+    return jsonify({"ok": True})
+
+
+@profile_bp.route("/profile/push-unsubscribe", methods=["POST"])
+@login_required
+def push_unsubscribe():
+    NotificationService.clear_subscription(current_user)
+    return jsonify({"ok": True})
 
 
 @profile_bp.route("/profile/update", methods=["POST"])

@@ -30,6 +30,11 @@ class User(UserMixin, db.Model):
     # jest wtedy tylko własny, prywatny plan (zachowanie sprzed tej opcji).
     show_all_plans = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Web Push (VAPID) — subskrypcja zapisana jako JSON (endpoint + klucze),
+    # dokładnie to, co zwraca przeglądarkowe pushManager.subscribe(). NULL,
+    # gdy użytkownik nigdy nie włączył powiadomień push (albo je wyłączył).
+    push_subscription = db.Column(db.Text, nullable=True)
+
     activities = db.relationship(
         "Activity", back_populates="owner", cascade="all, delete-orphan",
         foreign_keys="Activity.owner_id",

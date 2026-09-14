@@ -128,6 +128,21 @@
           <input type="checkbox" id="activity-all-day">
           <label for="activity-all-day" style="font-size:.85rem;">Cały dzień</label>
         </div>
+        <div class="form-group checkbox-row">
+          <input type="checkbox" id="activity-notify-enabled">
+          <label for="activity-notify-enabled" style="font-size:.85rem;">🔔 Powiadom przed aktywnością</label>
+        </div>
+        <div class="form-group" id="activity-notify-minutes-row" style="display:none;">
+          <label class="form-label" for="activity-notify-minutes">Ile wcześniej</label>
+          <select class="form-control" id="activity-notify-minutes">
+            <option value="5">5 minut</option>
+            <option value="15">15 minut</option>
+            <option value="30" selected>30 minut</option>
+            <option value="60">1 godzinę</option>
+            <option value="120">2 godziny</option>
+            <option value="1440">1 dzień</option>
+          </select>
+        </div>
         <div class="form-group">
           <label class="form-label" for="activity-location">Lokalizacja</label>
           <input class="form-control" type="text" id="activity-location">
