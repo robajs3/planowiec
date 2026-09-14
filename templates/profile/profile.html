@@ -116,6 +116,28 @@
         uruchomionej z tej ikony (bez tego iOS w ogóle nie pozwala na Web Push).
         Pełna instrukcja instalacji: <a href="{{ url_for('profile.install_app') }}">zobacz tutaj</a>.
       </p>
+
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:10px">
+          Chcesz przypomnienia dla wszystkich nadchodzących aktywności w swoim
+          planie naraz, zamiast zaznaczać to osobno przy każdej? Ustaw to tutaj —
+          zadziała tylko dla Twojego własnego, prywatnego planu (plany grup i
+          przeszłe aktywności zostają bez zmian).
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="form-control" id="notify-all-minutes" style="max-width:180px;width:auto">
+            <option value="5">5 minut przed</option>
+            <option value="15">15 minut przed</option>
+            <option value="30" selected>30 minut przed</option>
+            <option value="60">1 godzinę przed</option>
+            <option value="120">2 godziny przed</option>
+            <option value="1440">1 dzień przed</option>
+          </select>
+          <button type="button" class="btn btn-secondary" id="notify-all-btn" onclick="enableNotifyForAllActivities()">
+            🔔 Włącz dla wszystkich aktywności
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

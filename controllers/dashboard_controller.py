@@ -387,6 +387,21 @@ def api_delete_activity(activity_id):
     return jsonify({"ok": True, "deleted": deleted})
 
 
+@dashboard_bp.route("/dashboard/api/activities/notify-all", methods=["POST"])
+@login_required
+def api_notify_all_activities():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        minutes = int(data.get("minutes"))
+    except (TypeError, ValueError):
+        minutes = 0
+    if minutes <= 0:
+        return jsonify({"error": "Nieprawidłowa wartość 'ile wcześniej'."}), 400
+
+    updated = ActivityService.enable_notifications_for_all(current_user.id, minutes)
+    return jsonify({"ok": True, "updated": updated})
+
+
 def _activity_belongs_to_context(activity: Activity, owner_id: int | None, group_id: int | None) -> bool:
     """Zabezpieczenie przed edycją/usunięciem aktywności spoza kontekstu, do
     którego rzekomo należy żądanie (np. próba podania cudzego id w body)."""

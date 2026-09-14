@@ -178,3 +178,45 @@ async function setupPushNotifications() {
     return false;
   }
 }
+
+// Masowe włączanie przypomnień — przycisk "🔔 Włącz dla wszystkich
+// aktywności" w /profile. Jeśli user nie ma jeszcze aktywnej zgody/subskrypcji
+// push, najpierw ją zakładamy (kliknięcie przycisku samo jest wystarczającym
+// gestem użytkownika, więc przeglądarka pozwoli pokazać dialog o zgodę) —
+// bez tego ustawienie przypomnień na aktywnościach byłoby bez sensu, bo
+// scheduler i tak nie miałby dokąd wysłać powiadomienia.
+async function enableNotifyForAllActivities() {
+  const select = document.getElementById("notify-all-minutes");
+  const btn = document.getElementById("notify-all-btn");
+  if (!select || !btn) return;
+  const minutes = parseInt(select.value, 10);
+
+  if (getPushSupportState() !== "granted") {
+    const ok = await setupPushNotifications();
+    if (!ok) return;
+  }
+
+  const prefix = window.APP_URL_PREFIX || "";
+  btn.disabled = true;
+  const prevText = btn.textContent;
+  btn.textContent = "Włączam…";
+  try {
+    const resp = await fetch(prefix + "/dashboard/api/activities/notify-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutes }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      showToast(`Włączono przypomnienia dla ${data.updated} nadchodzących aktywności.`, "success");
+    } else {
+      showToast(data.error || "Nie udało się włączyć powiadomień dla wszystkich aktywności.", "danger");
+    }
+  } catch (e) {
+    console.warn("notify-all failed:", e);
+    showToast("Nie udało się połączyć z serwerem.", "danger");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prevText;
+  }
+}

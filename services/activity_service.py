@@ -351,6 +351,40 @@ class ActivityService:
         return True, None
 
     @staticmethod
+    def enable_notifications_for_all(owner_id: int, minutes: int) -> int:
+        """Ustawia to samo przypomnienie ('minutes' przed startem) na
+        wszystkich NADCHODZĄCYCH, prywatnych aktywnościach danego użytkownika
+        (plan własny, group_id is None) — używane przez przycisk "Włącz dla
+        wszystkich aktywności" w Profilu, żeby nie trzeba było ustawiać tego
+        osobno w każdym evencie.
+
+        Aktywności grupowe pomijamy celowo — nie mają jednego adresata do
+        powiadomienia (patrz NotificationService.send_activity_reminder).
+        Przeszłe aktywności też pomijamy — scheduler i tak nigdy by ich nie
+        wysłał (patrz reminder_scheduler.py: warunek start_time > now), więc
+        ustawianie im przypomnienia byłoby zwodnicze.
+
+        Zwraca liczbę zaktualizowanych aktywności."""
+        now = datetime.now()
+        activities = (
+            Activity.query
+            .filter(
+                Activity.owner_id == owner_id,
+                Activity.group_id.is_(None),
+                Activity.start_time > now,
+            )
+            .all()
+        )
+        for activity in activities:
+            if activity.notify_before_minutes != minutes:
+                # Zmiana ustawienia = zerujemy "wysłano", z tego samego
+                # powodu co przy pojedynczej edycji w update_activity.
+                activity.reminder_sent_at = None
+            activity.notify_before_minutes = minutes
+        db.session.commit()
+        return len(activities)
+
+    @staticmethod
     def delete_activity(activity: Activity, scope: str = "single") -> int:
         """Usuwa pojedynczą aktywność albo (gdy scope='series' i aktywność
         należy do wydarzenia cyklicznego) wszystkie jej wystąpienia z tej
