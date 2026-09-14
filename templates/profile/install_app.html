@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Install the app — Planowiec{% endblock %}
-{% block page_title %}Install the app{% endblock %}
+{% block title %}Zainstaluj aplikację — Planowiec{% endblock %}
+{% block page_title %}Zainstaluj aplikację{% endblock %}
 
 {% block content %}
 <div style="max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
@@ -8,9 +8,9 @@
   <div class="card">
     <div class="card-body">
       <p style="font-size:.88rem;color:var(--text-muted)">
-        You can install Planowiec like a regular app — you'll get an icon on your
-        home screen / app drawer, and the app will open without the browser's
-        address bar, just like a native app. Pick your platform below.
+        Planowca możesz zainstalować jak normalną aplikację — dostaniesz ikonę na ekranie
+        głównym / w szufladzie aplikacji, a appka otworzy się bez paska adresu przeglądarki,
+        jak natywna aplikacja. Wybierz swoją platformę poniżej.
       </p>
     </div>
   </div>
@@ -20,10 +20,10 @@
        renderuje jej zawartość z display:none i NIE zleca pobrania obrazków —
        ściągają się dopiero, gdy użytkownik faktycznie rozwinie daną opcję. -->
 
-  <!-- PC / Chrome & Edge -->
+  <!-- WEB / PC -->
   <details class="install-accordion-item">
     <summary class="install-accordion-summary">
-      <span class="install-accordion-title"><span class="emoji">🖥️</span> Computer (Chrome / Edge)</span>
+      <span class="install-accordion-title"><span class="emoji">🖥️</span> Komputer (Chrome / Edge)</span>
       <span class="install-accordion-chevron">⌄</span>
     </summary>
     <div class="install-accordion-body">
@@ -32,24 +32,24 @@
         <div class="install-step">
           <div class="install-step-num">1</div>
           <div class="install-step-body">
-            <p>Click the <strong>three-dot icon (⋮)</strong> in the top-right corner of the browser window.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step1.svg') }}" alt="Step 1 — ⋮ menu (top-right corner)" width="260" height="462">
+            <p>Kliknij ikonę <strong>trzech kropek (⋮)</strong> w prawym górnym rogu okna przeglądarki.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/web-1.png') }}" style="width:100%;max-width:640px;border-radius:8px;display:block;border:1px solid var(--border)" alt="Krok 1 — menu ⋮ (prawy górny róg)">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">2</div>
           <div class="install-step-body">
-            <p>Hover over <strong>"Cast, save, and share"</strong>.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step2.svg') }}" alt="Step 2 — 'Cast, save, and share'" width="260" height="462">
+            <p>Najedź na <strong>„Przesyłaj, zapisuj, udostępniaj”</strong>.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/web-2.png') }}" style="width:100%;max-width:640px;border-radius:8px;display:block;border:1px solid var(--border)" alt="Krok 2 — „Przesyłaj, zapisuj, udostępniaj”">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">3</div>
           <div class="install-step-body">
-            <p>From the submenu, choose <strong>"Install Planowiec"</strong>.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/pc-step3.svg') }}" alt="Step 3 — 'Install Planowiec'" width="260" height="462">
+            <p>Z rozwiniętego podmenu wybierz <strong>„Zainstaluj: Planowiec”</strong>.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/web-3.png') }}" style="width:100%;max-width:640px;border-radius:8px;display:block;border:1px solid var(--border)" alt="Krok 3 — „Zainstaluj: Planowiec”">
           </div>
         </div>
 
@@ -69,24 +69,24 @@
         <div class="install-step">
           <div class="install-step-num">1</div>
           <div class="install-step-body">
-            <p>Tap the <strong>three-dot icon (⋮)</strong> in the top-right corner of the screen.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step1.svg') }}" alt="Step 1 — ⋮ menu (top-right corner)" width="260" height="462">
+            <p>Dotknij ikony <strong>trzech kropek (⋮)</strong> w prawym górnym rogu ekranu.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/android-1.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 1 — menu ⋮ (prawy górny róg)">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">2</div>
           <div class="install-step-body">
-            <p>From the menu, choose <strong>"Install app"</strong> (on some phones it's under <strong>"Add to Home screen"</strong>).</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step2.svg') }}" alt="Step 2 — 'Install app' / 'Add to Home screen'" width="260" height="462">
+            <p>Z menu wybierz <strong>„Zainstaluj aplikację”</strong> (na niektórych telefonach schowane pod <strong>„Utwórz skrót”</strong>).</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/android-2.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 2 — „Zainstaluj aplikację” / „Utwórz skrót”">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">3</div>
           <div class="install-step-body">
-            <p>Confirm with <strong>"Install Planowiec"</strong>. The icon will land on your home screen / app drawer.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/android-step3.svg') }}" alt="Step 3 — 'Install Planowiec'" width="260" height="462">
+            <p>Potwierdź przyciskiem <strong>„Zainstaluj: Planowiec”</strong>. Ikona wyląduje na ekranie głównym / w szufladzie aplikacji.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/android-3.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 3 — „Zainstaluj: Planowiec”">
           </div>
         </div>
 
@@ -102,31 +102,31 @@
     </summary>
     <div class="install-accordion-body">
       <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">
-        Must be opened in <strong>Safari</strong> — Chrome on iOS doesn't have the option to add to the home screen.
+        Musi być otwarte w <strong>Safari</strong> — Chrome na iOS nie ma opcji dodania do ekranu głównego.
       </p>
       <div class="install-steps">
 
         <div class="install-step">
           <div class="install-step-num">1</div>
           <div class="install-step-body">
-            <p>Tap the <strong>three-dot icon (⋯)</strong> in the bottom-right corner of the screen (next to the address bar).</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step1.svg') }}" alt="Step 1 — ⋯ menu (bottom-right corner)" width="260" height="462">
+            <p>Dotknij ikony <strong>trzech kropek (⋯)</strong> w prawym dolnym rogu ekranu (obok pola adresu).</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/ios-1.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 1 — menu ⋯ (prawy dolny róg)">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">2</div>
           <div class="install-step-body">
-            <p>Choose <strong>"Share"</strong> ⬆️.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step2.svg') }}" alt="Step 2 — 'Share'" width="260" height="462">
+            <p>Wybierz <strong>„Udostępnij”</strong> ⬆️.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/ios-2.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 2 — „Udostępnij”">
           </div>
         </div>
 
         <div class="install-step">
           <div class="install-step-num">3</div>
           <div class="install-step-body">
-            <p>From the option list, choose <strong>"Add to Home Screen"</strong> and confirm with <strong>"Add"</strong> in the top-right corner.</p>
-            <img class="screenshot-shot" loading="lazy" src="{{ url_for('static', filename='img/install-guide/ios-step3.svg') }}" alt="Step 3 — 'Add to Home Screen'" width="260" height="462">
+            <p>Z listy opcji wybierz <strong>„Do ekranu głównego”</strong> i potwierdź <strong>„Dodaj”</strong> w prawym górnym rogu.</p>
+            <img loading="lazy" src="{{ url_for('static', filename='img/ios-3.png') }}" style="width:100%;max-width:260px;border-radius:8px;display:block" alt="Krok 3 — „Do ekranu głównego”">
           </div>
         </div>
 
