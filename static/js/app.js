@@ -90,10 +90,28 @@ function isStandalonePwa() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
-// Włączenie powiadomień push — wywoływane z przycisku w /profile. Prośba o
-// zgodę (Notification.requestPermission) MUSI być odpowiedzią na gest
-// użytkownika, inaczej przeglądarki ją blokują — dlatego to osobna funkcja,
-// a nie coś odpalane automatycznie przy ładowaniu strony.
+// Sprawdza (bez pytania o zgodę) czy w tej przeglądarce da się w ogóle
+// korzystać z powiadomień push i w jakim są stanie. Używane m.in. przy
+// otwieraniu formularza aktywności, żeby dobrać treść podpowiedzi i to,
+// czy checkbox "Powiadom przed aktywnością" ma być klikalny.
+function getPushSupportState() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return "unsupported";
+  }
+  return Notification.permission; // "granted" | "denied" | "default"
+}
+
+// Włączenie powiadomień push. Wywoływane zarówno z przycisku w /profile,
+// jak i automatycznie po zaznaczeniu "Powiadom przed aktywnością" w
+// formularzu wydarzenia. Prośba o zgodę (Notification.requestPermission)
+// MUSI być odpowiedzią na gest użytkownika (klik), inaczej przeglądarki ją
+// blokują — dlatego wywołujemy to z handlera "change"/"click", a nie
+// automatycznie przy ładowaniu strony.
+//
+// Zwraca true, jeśli po zakończeniu użytkownik ma aktywną, zapisaną na
+// serwerze subskrypcję push — false w każdym innym przypadku (brak wsparcia,
+// odmowa, błąd). Wywołujący kod (np. checkbox w kalendarzu) na tej podstawie
+// decyduje, czy zostawić opcję powiadomień włączoną, czy ją zablokować.
 async function setupPushNotifications() {
   const prefix = window.APP_URL_PREFIX || "";
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -102,13 +120,23 @@ async function setupPushNotifications() {
     } else {
       showToast("Ta przeglądarka nie wspiera powiadomień push.", "warning");
     }
-    return;
+    return false;
   }
+
+  // Gdy przeglądarka ma już zapamiętaną odmowę, Notification.requestPermission()
+  // i tak od razu zwróci "denied" bez pokazania okna — ale komunikat "nie
+  // zgodziłeś się" byłby mylący (użytkownik nic teraz nie kliknął). Dajemy
+  // od razu jasną informację, co zrobić, żeby to odblokować.
+  if (Notification.permission === "denied") {
+    showToast("Powiadomienia są zablokowane w przeglądarce dla tej strony. Odblokuj je w ustawieniach witryny (ikona 🔒/ⓘ obok adresu) i spróbuj ponownie.", "warning");
+    return false;
+  }
+
   try {
     const reg = await registerServiceWorker();
     if (!reg) {
       showToast("Nie udało się zarejestrować Service Workera.", "danger");
-      return;
+      return false;
     }
     await navigator.serviceWorker.ready;
 
@@ -116,13 +144,13 @@ async function setupPushNotifications() {
     const { publicKey } = await r.json();
     if (!publicKey) {
       showToast("Serwer nie ma skonfigurowanego VAPID_PUBLIC_KEY.", "danger");
-      return;
+      return false;
     }
 
     const perm = await Notification.requestPermission();
     if (perm !== "granted") {
       showToast("Nie zgodziłeś się na powiadomienia — nie mogę ich włączyć.", "warning");
-      return;
+      return false;
     }
 
     let sub = await reg.pushManager.getSubscription();
@@ -140,11 +168,13 @@ async function setupPushNotifications() {
     });
     if (resp.ok) {
       showToast("Powiadomienia push włączone!", "success");
-    } else {
-      showToast("Serwer odrzucił subskrypcję push.", "danger");
+      return true;
     }
+    showToast("Serwer odrzucił subskrypcję push.", "danger");
+    return false;
   } catch (e) {
     console.warn("Push setup failed:", e);
     showToast("Nie udało się włączyć powiadomień push.", "danger");
+    return false;
   }
 }

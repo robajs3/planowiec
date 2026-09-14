@@ -1,0 +1,203 @@
+# Patch: automatyczne pytanie o zgodę na powiadomienia przy tworzeniu eventu z przypomnieniem
+# Zastosuj z katalogu głównego repo: patch -p1 < planowiec-notify-permission.patch
+
+--- a2/static/js/app.js	2026-09-14 08:36:41.856627647 +0000
++++ b2/static/js/app.js	2026-09-14 08:36:41.887559726 +0000
+@@ -90,10 +90,28 @@
+   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+ }
+ 
+-// Włączenie powiadomień push — wywoływane z przycisku w /profile. Prośba o
+-// zgodę (Notification.requestPermission) MUSI być odpowiedzią na gest
+-// użytkownika, inaczej przeglądarki ją blokują — dlatego to osobna funkcja,
+-// a nie coś odpalane automatycznie przy ładowaniu strony.
++// Sprawdza (bez pytania o zgodę) czy w tej przeglądarce da się w ogóle
++// korzystać z powiadomień push i w jakim są stanie. Używane m.in. przy
++// otwieraniu formularza aktywności, żeby dobrać treść podpowiedzi i to,
++// czy checkbox "Powiadom przed aktywnością" ma być klikalny.
++function getPushSupportState() {
++  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
++    return "unsupported";
++  }
++  return Notification.permission; // "granted" | "denied" | "default"
++}
++
++// Włączenie powiadomień push. Wywoływane zarówno z przycisku w /profile,
++// jak i automatycznie po zaznaczeniu "Powiadom przed aktywnością" w
++// formularzu wydarzenia. Prośba o zgodę (Notification.requestPermission)
++// MUSI być odpowiedzią na gest użytkownika (klik), inaczej przeglądarki ją
++// blokują — dlatego wywołujemy to z handlera "change"/"click", a nie
++// automatycznie przy ładowaniu strony.
++//
++// Zwraca true, jeśli po zakończeniu użytkownik ma aktywną, zapisaną na
++// serwerze subskrypcję push — false w każdym innym przypadku (brak wsparcia,
++// odmowa, błąd). Wywołujący kod (np. checkbox w kalendarzu) na tej podstawie
++// decyduje, czy zostawić opcję powiadomień włączoną, czy ją zablokować.
+ async function setupPushNotifications() {
+   const prefix = window.APP_URL_PREFIX || "";
+   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+@@ -102,13 +120,23 @@
+     } else {
+       showToast("Ta przeglądarka nie wspiera powiadomień push.", "warning");
+     }
+-    return;
++    return false;
+   }
++
++  // Gdy przeglądarka ma już zapamiętaną odmowę, Notification.requestPermission()
++  // i tak od razu zwróci "denied" bez pokazania okna — ale komunikat "nie
++  // zgodziłeś się" byłby mylący (użytkownik nic teraz nie kliknął). Dajemy
++  // od razu jasną informację, co zrobić, żeby to odblokować.
++  if (Notification.permission === "denied") {
++    showToast("Powiadomienia są zablokowane w przeglądarce dla tej strony. Odblokuj je w ustawieniach witryny (ikona 🔒/ⓘ obok adresu) i spróbuj ponownie.", "warning");
++    return false;
++  }
++
+   try {
+     const reg = await registerServiceWorker();
+     if (!reg) {
+       showToast("Nie udało się zarejestrować Service Workera.", "danger");
+-      return;
++      return false;
+     }
+     await navigator.serviceWorker.ready;
+ 
+@@ -116,13 +144,13 @@
+     const { publicKey } = await r.json();
+     if (!publicKey) {
+       showToast("Serwer nie ma skonfigurowanego VAPID_PUBLIC_KEY.", "danger");
+-      return;
++      return false;
+     }
+ 
+     const perm = await Notification.requestPermission();
+     if (perm !== "granted") {
+       showToast("Nie zgodziłeś się na powiadomienia — nie mogę ich włączyć.", "warning");
+-      return;
++      return false;
+     }
+ 
+     let sub = await reg.pushManager.getSubscription();
+@@ -140,11 +168,13 @@
+     });
+     if (resp.ok) {
+       showToast("Powiadomienia push włączone!", "success");
+-    } else {
+-      showToast("Serwer odrzucił subskrypcję push.", "danger");
++      return true;
+     }
++    showToast("Serwer odrzucił subskrypcję push.", "danger");
++    return false;
+   } catch (e) {
+     console.warn("Push setup failed:", e);
+     showToast("Nie udało się włączyć powiadomień push.", "danger");
++    return false;
+   }
+ }
+--- a2/static/js/calendar.js	2026-09-14 08:36:41.856922178 +0000
++++ b2/static/js/calendar.js	2026-09-14 08:36:41.887621618 +0000
+@@ -694,8 +694,55 @@
+   const actNotifyEnabled = document.getElementById("activity-notify-enabled");
+   const actNotifyMinutesRow = document.getElementById("activity-notify-minutes-row");
+   const actNotifyMinutes = document.getElementById("activity-notify-minutes");
++  const actNotifyHint = document.getElementById("activity-notify-hint");
+ 
+-  actNotifyEnabled.addEventListener("change", () => {
++  // Ustawia treść podpowiedzi pod checkboxem oraz to, czy checkbox jest w
++  // ogóle klikalny, na podstawie aktualnego stanu uprawnień do powiadomień
++  // w przeglądarce. Wołane przy każdym otwarciu formularza aktywności, więc
++  // stan zawsze odzwierciedla to, co user ustawił (lub cofnął) w przeglądarce
++  // od czasu ostatniego otwarcia — nie trzeba wchodzić do Profilu.
++  function updateNotifyAvailability() {
++    const state = typeof getPushSupportState === "function" ? getPushSupportState() : "default";
++    if (state === "unsupported") {
++      actNotifyEnabled.disabled = true;
++      actNotifyHint.textContent = "Ta przeglądarka nie wspiera powiadomień push.";
++    } else if (state === "denied") {
++      // Zgodnie z założeniem: skoro user nie zezwolił na powiadomienia,
++      // blokujemy samą opcję dodawania przypomnień (nie cały formularz) —
++      // checkbox jest wyszarzony, dopóki uprawnienie nie zostanie odblokowane
++      // ręcznie w ustawieniach przeglądarki.
++      actNotifyEnabled.disabled = true;
++      actNotifyHint.textContent = "🔒 Powiadomienia są zablokowane w przeglądarce — kliknij ikonę kłódki/ⓘ obok adresu strony, odblokuj powiadomienia i odśwież stronę, żeby móc ustawić przypomnienie.";
++    } else if (state === "default") {
++      actNotifyEnabled.disabled = false;
++      actNotifyHint.textContent = "Kliknij, jeśli powiadomienia są wyłączone — zapytamy o zgodę w przeglądarce.";
++    } else {
++      // "granted"
++      actNotifyEnabled.disabled = false;
++      actNotifyHint.textContent = "";
++    }
++  }
++
++  actNotifyEnabled.addEventListener("change", async () => {
++    if (actNotifyEnabled.checked) {
++      // Zamiast kazać userowi najpierw iść do Profilu i włączyć tam
++      // powiadomienia, robimy to od razu tutaj — sam gest zaznaczenia
++      // checkboxa liczy się jako "gest użytkownika", więc przeglądarka
++      // pozwoli pokazać natywny dialog z prośbą o zgodę.
++      actNotifyEnabled.disabled = true;
++      actNotifyHint.textContent = "Proszę o zgodę na powiadomienia…";
++      const ok = await setupPushNotifications();
++      actNotifyEnabled.disabled = false;
++      if (!ok) {
++        // Nie zezwolono (albo brak wsparcia) — blokujemy opcję powiadomień
++        // dla tego wydarzenia, zamiast pozwolić zapisać nieaktywne przypomnienie.
++        actNotifyEnabled.checked = false;
++        actNotifyMinutesRow.style.display = "none";
++        updateNotifyAvailability();
++        return;
++      }
++    }
++    updateNotifyAvailability();
+     actNotifyMinutesRow.style.display = actNotifyEnabled.checked ? "block" : "none";
+   });
+ 
+@@ -837,6 +884,10 @@
+       actNotifyEnabled.checked = !!minutes;
+       actNotifyMinutesRow.style.display = minutes ? "block" : "none";
+       if (minutes) actNotifyMinutes.value = String(minutes);
++      // Odświeżamy stan checkboxa (klikalny/zablokowany) i podpowiedź przy
++      // każdym otwarciu — użytkownik mógł od poprzedniego razu zmienić
++      // uprawnienia do powiadomień w przeglądarce.
++      updateNotifyAvailability();
+     }
+ 
+     let startDate = activity ? new Date(activity.start) : (presetDate ? new Date(presetDate) : new Date());
+@@ -893,6 +944,13 @@
+ 
+   actForm.addEventListener("submit", async (e) => {
+     e.preventDefault();
++    // Zabezpieczenie: nawet jeśli checkbox jakimś trafem został zaznaczony
++    // bez realnie aktywnej zgody na powiadomienia (np. użytkownik cofnął
++    // uprawnienie w przeglądarce tuż przed kliknięciem "Zapisz"), nigdy nie
++    // zapisujemy przypomnienia bez faktycznego "granted".
++    const notifyReallyGranted = actNotifyEnabled.checked
++      && typeof getPushSupportState === "function"
++      && getPushSupportState() === "granted";
+     const payload = {
+       context: editCtx.context,
+       id: editCtx.id,
+@@ -900,7 +958,7 @@
+       description: document.getElementById("activity-description").value,
+       location: document.getElementById("activity-location").value,
+       all_day: document.getElementById("activity-all-day").checked,
+-      notify_before_minutes: actNotifyEnabled.checked ? parseInt(actNotifyMinutes.value, 10) : null,
++      notify_before_minutes: notifyReallyGranted ? parseInt(actNotifyMinutes.value, 10) : null,
+       start: document.getElementById("activity-start").value,
+       end: document.getElementById("activity-end").value,
+       activity_type_id: parseInt(actTypeSelect.value, 10),
+--- a2/templates/dashboard/index.html	2026-09-14 08:36:41.857948625 +0000
++++ b2/templates/dashboard/index.html	2026-09-14 08:36:41.888190634 +0000
+@@ -132,6 +132,11 @@
+           <input type="checkbox" id="activity-notify-enabled">
+           <label for="activity-notify-enabled" style="font-size:.85rem;">🔔 Powiadom przed aktywnością</label>
+         </div>
++        <!-- Dynamiczna podpowiedź (patrz calendar.js::updateNotifyAvailability) —
++             tłumaczy, że zaznaczenie checkboxa samo poprosi o zgodę na
++             powiadomienia, albo że trzeba je odblokować w przeglądarce,
++             jeśli użytkownik wcześniej odmówił. -->
++        <p class="list-item-sub" id="activity-notify-hint" style="font-size:.75rem;margin:-8px 0 10px 26px;"></p>
+         <div class="form-group" id="activity-notify-minutes-row" style="display:none;">
+           <label class="form-label" for="activity-notify-minutes">Ile wcześniej</label>
+           <select class="form-control" id="activity-notify-minutes">

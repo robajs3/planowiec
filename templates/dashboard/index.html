@@ -132,6 +132,11 @@
           <input type="checkbox" id="activity-notify-enabled">
           <label for="activity-notify-enabled" style="font-size:.85rem;">🔔 Powiadom przed aktywnością</label>
         </div>
+        <!-- Dynamiczna podpowiedź (patrz calendar.js::updateNotifyAvailability) —
+             tłumaczy, że zaznaczenie checkboxa samo poprosi o zgodę na
+             powiadomienia, albo że trzeba je odblokować w przeglądarce,
+             jeśli użytkownik wcześniej odmówił. -->
+        <p class="list-item-sub" id="activity-notify-hint" style="font-size:.75rem;margin:-8px 0 10px 26px;"></p>
         <div class="form-group" id="activity-notify-minutes-row" style="display:none;">
           <label class="form-label" for="activity-notify-minutes">Ile wcześniej</label>
           <select class="form-control" id="activity-notify-minutes">

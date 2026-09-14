@@ -694,8 +694,55 @@
   const actNotifyEnabled = document.getElementById("activity-notify-enabled");
   const actNotifyMinutesRow = document.getElementById("activity-notify-minutes-row");
   const actNotifyMinutes = document.getElementById("activity-notify-minutes");
+  const actNotifyHint = document.getElementById("activity-notify-hint");
 
-  actNotifyEnabled.addEventListener("change", () => {
+  // Ustawia treść podpowiedzi pod checkboxem oraz to, czy checkbox jest w
+  // ogóle klikalny, na podstawie aktualnego stanu uprawnień do powiadomień
+  // w przeglądarce. Wołane przy każdym otwarciu formularza aktywności, więc
+  // stan zawsze odzwierciedla to, co user ustawił (lub cofnął) w przeglądarce
+  // od czasu ostatniego otwarcia — nie trzeba wchodzić do Profilu.
+  function updateNotifyAvailability() {
+    const state = typeof getPushSupportState === "function" ? getPushSupportState() : "default";
+    if (state === "unsupported") {
+      actNotifyEnabled.disabled = true;
+      actNotifyHint.textContent = "Ta przeglądarka nie wspiera powiadomień push.";
+    } else if (state === "denied") {
+      // Zgodnie z założeniem: skoro user nie zezwolił na powiadomienia,
+      // blokujemy samą opcję dodawania przypomnień (nie cały formularz) —
+      // checkbox jest wyszarzony, dopóki uprawnienie nie zostanie odblokowane
+      // ręcznie w ustawieniach przeglądarki.
+      actNotifyEnabled.disabled = true;
+      actNotifyHint.textContent = "🔒 Powiadomienia są zablokowane w przeglądarce — kliknij ikonę kłódki/ⓘ obok adresu strony, odblokuj powiadomienia i odśwież stronę, żeby móc ustawić przypomnienie.";
+    } else if (state === "default") {
+      actNotifyEnabled.disabled = false;
+      actNotifyHint.textContent = "Kliknij, jeśli powiadomienia są wyłączone — zapytamy o zgodę w przeglądarce.";
+    } else {
+      // "granted"
+      actNotifyEnabled.disabled = false;
+      actNotifyHint.textContent = "";
+    }
+  }
+
+  actNotifyEnabled.addEventListener("change", async () => {
+    if (actNotifyEnabled.checked) {
+      // Zamiast kazać userowi najpierw iść do Profilu i włączyć tam
+      // powiadomienia, robimy to od razu tutaj — sam gest zaznaczenia
+      // checkboxa liczy się jako "gest użytkownika", więc przeglądarka
+      // pozwoli pokazać natywny dialog z prośbą o zgodę.
+      actNotifyEnabled.disabled = true;
+      actNotifyHint.textContent = "Proszę o zgodę na powiadomienia…";
+      const ok = await setupPushNotifications();
+      actNotifyEnabled.disabled = false;
+      if (!ok) {
+        // Nie zezwolono (albo brak wsparcia) — blokujemy opcję powiadomień
+        // dla tego wydarzenia, zamiast pozwolić zapisać nieaktywne przypomnienie.
+        actNotifyEnabled.checked = false;
+        actNotifyMinutesRow.style.display = "none";
+        updateNotifyAvailability();
+        return;
+      }
+    }
+    updateNotifyAvailability();
     actNotifyMinutesRow.style.display = actNotifyEnabled.checked ? "block" : "none";
   });
 
@@ -837,6 +884,10 @@
       actNotifyEnabled.checked = !!minutes;
       actNotifyMinutesRow.style.display = minutes ? "block" : "none";
       if (minutes) actNotifyMinutes.value = String(minutes);
+      // Odświeżamy stan checkboxa (klikalny/zablokowany) i podpowiedź przy
+      // każdym otwarciu — użytkownik mógł od poprzedniego razu zmienić
+      // uprawnienia do powiadomień w przeglądarce.
+      updateNotifyAvailability();
     }
 
     let startDate = activity ? new Date(activity.start) : (presetDate ? new Date(presetDate) : new Date());
@@ -893,6 +944,13 @@
 
   actForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    // Zabezpieczenie: nawet jeśli checkbox jakimś trafem został zaznaczony
+    // bez realnie aktywnej zgody na powiadomienia (np. użytkownik cofnął
+    // uprawnienie w przeglądarce tuż przed kliknięciem "Zapisz"), nigdy nie
+    // zapisujemy przypomnienia bez faktycznego "granted".
+    const notifyReallyGranted = actNotifyEnabled.checked
+      && typeof getPushSupportState === "function"
+      && getPushSupportState() === "granted";
     const payload = {
       context: editCtx.context,
       id: editCtx.id,
@@ -900,7 +958,7 @@
       description: document.getElementById("activity-description").value,
       location: document.getElementById("activity-location").value,
       all_day: document.getElementById("activity-all-day").checked,
-      notify_before_minutes: actNotifyEnabled.checked ? parseInt(actNotifyMinutes.value, 10) : null,
+      notify_before_minutes: notifyReallyGranted ? parseInt(actNotifyMinutes.value, 10) : null,
       start: document.getElementById("activity-start").value,
       end: document.getElementById("activity-end").value,
       activity_type_id: parseInt(actTypeSelect.value, 10),
