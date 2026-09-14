@@ -35,6 +35,28 @@ class User(UserMixin, db.Model):
     # gdy użytkownik nigdy nie włączył powiadomień push (albo je wyłączył).
     push_subscription = db.Column(db.Text, nullable=True)
 
+    # Gdy True — każda NOWO utworzona aktywność w prywatnym planie (nie
+    # grupowym) dostaje automatycznie ustawione przypomnienie na
+    # `notify_new_activities_minutes` minut przed startem, bez konieczności
+    # zaznaczania tego ręcznie w formularzu przy każdym wpisie. Nie nadpisuje
+    # wyboru użytkownika, gdy ten sam jawnie ustawił/wyłączył przypomnienie
+    # w formularzu (patrz ActivityService.create_activity).
+    notify_new_activities = db.Column(db.Boolean, default=False, nullable=False)
+    notify_new_activities_minutes = db.Column(db.Integer, default=30, nullable=False)
+
+    # Preferencja powiadomień o nowych aktywnościach w planach GRUP, do
+    # których użytkownik należy:
+    #   "none"     – nigdy nie powiadamiaj o niczym z grup
+    #   "all"      – powiadamiaj o wszystkich grupach (domyślne)
+    #   "selected" – tylko te grupy, które użytkownik oznaczył dzwonkiem
+    #                (patrz GroupMember.notifications_enabled)
+    group_notification_pref = db.Column(db.String(20), default="all", nullable=False)
+
+    # Chwilowe wyciszenie WSZYSTKICH powiadomień push (niezależnie od źródła)
+    # do podanego momentu w czasie — NULL, gdy wyciszenie nieaktywne. Ustawiane
+    # przez /notifications/mute (max 1 dzień), kasowane przez /notifications/unmute.
+    notifications_muted_until = db.Column(db.DateTime, nullable=True)
+
     activities = db.relationship(
         "Activity", back_populates="owner", cascade="all, delete-orphan",
         foreign_keys="Activity.owner_id",
@@ -52,6 +74,13 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def notifications_muted(self) -> bool:
+        """True, gdy trwa chwilowe wyciszenie powiadomień (patrz
+        notifications_muted_until) — sprawdzane w NotificationService.send_push
+        przy każdej próbie wysyłki push."""
+        return bool(self.notifications_muted_until and self.notifications_muted_until > datetime.utcnow())
 
     @property
     def name(self) -> str:

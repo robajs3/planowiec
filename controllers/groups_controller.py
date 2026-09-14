@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 
 from flask_login import login_required, current_user
 
-from models import Group, ALL_ROLES, ROLE_LABELS
+from models import db, Group, ALL_ROLES, ROLE_LABELS
 from services.group_service import GroupService
 from services.activity_service import ActivityService
 
@@ -64,6 +64,27 @@ def detail(group_id):
         all_roles=ALL_ROLES,
         role_labels=ROLE_LABELS,
     )
+
+
+@groups_bp.route("/groups/<int:group_id>/notifications", methods=["POST"])
+@login_required
+def toggle_notifications(group_id):
+    """Włącza/wyłącza powiadomienia o nowych aktywnościach w TEJ grupie dla
+    zalogowanego użytkownika. Ma znaczenie tylko, gdy jego globalna
+    preferencja (Profil → Powiadomienia → Ustawienia) to „tylko wybrane
+    grupy" — przy „wszystkie"/„brak" ta flaga jest ignorowana."""
+    membership = GroupService.get_membership(current_user.id, group_id)
+    if not membership:
+        abort(403)
+    membership.notifications_enabled = not membership.notifications_enabled
+    db.session.commit()
+    flash(
+        "Włączono powiadomienia dla tej grupy." if membership.notifications_enabled
+        else "Wyłączono powiadomienia dla tej grupy.",
+        "success",
+    )
+    next_url = request.form.get("next") or url_for("groups.detail", group_id=group_id)
+    return redirect(next_url)
 
 
 @groups_bp.route("/groups/<int:group_id>/leave", methods=["POST"])

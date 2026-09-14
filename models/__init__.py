@@ -30,6 +30,7 @@ from models.group_model import (  # noqa: E402
     ROLE_LABELS,
 )
 from models.announcement_model import Announcement  # noqa: E402
+from models.notification_model import Notification  # noqa: E402
 
 __all__ = [
     "db",
@@ -55,4 +56,5 @@ __all__ = [
     "ALL_ROLES",
     "ROLE_LABELS",
     "Announcement",
+    "Notification",
 ]

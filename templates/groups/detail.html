@@ -18,6 +18,23 @@
         <span class="badge badge-primary">Twoja rola: {{ membership.role_label }}</span>
       </div>
 
+      <div class="settings-row" style="margin-top:16px;">
+        <div>
+          <div class="settings-label">🔔 Powiadomienia o nowych aktywnościach</div>
+          <div class="settings-hint">
+            Dotyczy tylko, gdy w Profil → Powiadomienia → Ustawienia masz
+            wybrane „Tylko wybrane grupy".
+          </div>
+        </div>
+        <form method="POST" action="{{ url_for('groups.toggle_notifications', group_id=group.id) }}">
+          <input type="hidden" name="next" value="{{ url_for('groups.detail', group_id=group.id) }}">
+          <label class="switch">
+            <input type="checkbox" onchange="this.form.requestSubmit()" {% if membership.notifications_enabled %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </form>
+      </div>
+
       <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
         <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.group_calendar', group_id=group.id) }}">Otwórz plan grupy</a>
         {% if is_admin %}

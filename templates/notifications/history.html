@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Powiadomienia · Planowiec{% endblock %}
+{% block page_title %}Powiadomienia{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a class="tab active" href="{{ url_for('notifications.index') }}">Historia</a>
+  <a class="tab" href="{{ url_for('notifications.settings') }}">Ustawienia</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if notifications %}
+      {% for n in notifications %}
+        <div class="list-item">
+          <div style="font-size:1.3rem;line-height:1;">
+            {% if n.kind == 'group_activity' %}🧩{% else %}⏰{% endif %}
+          </div>
+          <div class="list-item-info">
+            <div class="list-item-name">
+              {% if n.link %}<a href="{{ n.link }}">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}
+            </div>
+            {% if n.body %}<div class="list-item-sub">{{ n.body }}</div>{% endif %}
+            <div class="list-item-sub">{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <div class="icon">🔔</div>
+        Nie masz jeszcze żadnych powiadomień.<br>
+        Pojawią się tu przypomnienia o Twoich aktywnościach oraz nowościach w grupach.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

@@ -140,7 +140,7 @@ async function setupPushNotifications() {
     }
     await navigator.serviceWorker.ready;
 
-    const r = await fetch(prefix + "/profile/vapid-public-key");
+    const r = await fetch(prefix + "/notifications/vapid-public-key");
     const { publicKey } = await r.json();
     if (!publicKey) {
       showToast("Serwer nie ma skonfigurowanego VAPID_PUBLIC_KEY.", "danger");
@@ -161,7 +161,7 @@ async function setupPushNotifications() {
       });
     }
 
-    const resp = await fetch(prefix + "/profile/push-subscribe", {
+    const resp = await fetch(prefix + "/notifications/push-subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(sub),

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from models import db, ActivityType, Activity, DEFAULT_ACTIVITY_TYPES
+from models import db, ActivityType, Activity, User, DEFAULT_ACTIVITY_TYPES
 
 RECURRENCE_NONE = "none"
 RECURRENCE_DAILY = "daily"
@@ -243,6 +243,17 @@ class ActivityService:
         except (TypeError, ValueError):
             notify_before_minutes = None
 
+        # Jeśli formularz nie ustawił przypomnienia jawnie, a właściciel PRYWATNEGO
+        # planu ma włączony switch "powiadamiaj o wszystkich nowo dodanych
+        # aktywnościach" (User.notify_new_activities), włączamy je automatycznie
+        # z jego domyślną liczbą minut — bez potrzeby zaznaczania tego ręcznie
+        # przy każdym wpisie. Aktywności grupowe pomijamy celowo (patrz
+        # NotificationService.send_activity_reminder — nie mają jednego adresata).
+        if notify_before_minutes is None and group_id is None:
+            owner = User.query.get(owner_id)
+            if owner and owner.notify_new_activities:
+                notify_before_minutes = owner.notify_new_activities_minutes
+
         occurrences = [(start, end)]
         recurrence_id = None
 
@@ -303,6 +314,18 @@ class ActivityService:
             db.session.add(activity)
             created.append(activity)
         db.session.commit()
+
+        # Nowa aktywność w planie GRUPY -> powiadamiamy jej członków (poza
+        # autorem), zgodnie z ich ustawieniami powiadomień z grup. Wysyłamy
+        # tylko dla pierwszego wystąpienia serii, żeby cykl (np. codzienny)
+        # nie zasypał wszystkich dziesiątkami powiadomień naraz.
+        if group_id is not None:
+            from services.notification_service import NotificationService
+            try:
+                NotificationService.notify_group_new_activity(created[0])
+            except Exception:
+                pass  # brak powiadomienia nie może zepsuć tworzenia aktywności
+
         # Zwracamy pierwsze wystąpienie — front dostaje natychmiastowe
         # potwierdzenie, a resztę serii i tak pobierze przy kolejnym
         # odświeżeniu widoku kalendarza.

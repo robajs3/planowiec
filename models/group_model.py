@@ -80,6 +80,12 @@ class GroupMember(db.Model):
     role = db.Column(db.String(20), default=ROLE_VIEWER, nullable=False)
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Czy TEN użytkownik chce dostawać powiadomienia push o nowych
+    # aktywnościach dodanych w planie TEJ grupy. Ma znaczenie tylko, gdy
+    # User.group_notification_pref danego użytkownika == "selected" — przy
+    # "all"/"none" ta flaga jest ignorowana (patrz NotificationService).
+    notifications_enabled = db.Column(db.Boolean, default=True, nullable=False)
+
     group = db.relationship("Group", back_populates="members")
     user = db.relationship("User")
 

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Ustawienia powiadomień · Planowiec{% endblock %}
+{% block page_title %}Powiadomienia{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a class="tab" href="{{ url_for('notifications.index') }}">Historia</a>
+  <a class="tab active" href="{{ url_for('notifications.settings') }}">Ustawienia</a>
+</div>
+
+<div class="grid-2">
+
+  <div class="card">
+    <div class="card-header"><h3>🔔 Powiadomienia push</h3></div>
+    <div class="card-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+        Włącz, żeby dostawać przypomnienia o aktywnościach, przy których zaznaczysz
+        „Powiadom przed aktywnością" — nawet gdy Planowiec jest zamknięty.
+      </p>
+      <button type="button" class="btn btn-primary" onclick="setupPushNotifications()">
+        Włącz powiadomienia push
+      </button>
+      <p class="list-item-sub" style="font-size:.78rem;margin-top:8px">
+        Na iPhonie/iPadzie: otwórz tę stronę w Safari, dotknij ikony Udostępnij →
+        „Dodaj do ekranu początkowego", a dopiero potem włącz powiadomienia z appki
+        uruchomionej z tej ikony (bez tego iOS w ogóle nie pozwala na Web Push).
+        Pełna instrukcja instalacji: <a href="{{ url_for('profile.install_app') }}">zobacz tutaj</a>.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>🌙 Chwilowe wyciszenie</h3></div>
+    <div class="card-body">
+      {% if is_muted %}
+        <p style="font-size:.85rem;margin-bottom:12px">
+          Powiadomienia są <strong>wyciszone</strong> do
+          <strong>{{ current_user.notifications_muted_until.strftime('%H:%M') }}</strong>
+          ({{ current_user.notifications_muted_until.strftime('%d.%m.%Y') }}).
+          W tym czasie push-e nie będą wysyłane (historia nadal się zapisuje).
+        </p>
+        <form method="POST" action="{{ url_for('notifications.unmute') }}">
+          <button type="submit" class="btn btn-outline">Anuluj wyciszenie</button>
+        </form>
+      {% else %}
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+          Wyłącz na jakiś czas wszystkie powiadomienia push (maks. 1 dzień) —
+          np. na czas spotkania albo snu. Historia powiadomień w tym czasie
+          nadal będzie się zapisywać, tylko bez wysyłki push.
+        </p>
+        <form method="POST" action="{{ url_for('notifications.mute') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="form-control" name="minutes" style="max-width:180px;width:auto">
+            {% for label, minutes in mute_options %}
+              <option value="{{ minutes }}" {% if minutes == 60 %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary">🔕 Wycisz powiadomienia</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>🆕 Nowo dodane aktywności</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('notifications.update_new_activities') }}">
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Powiadamiaj automatycznie o nowych aktywnościach</div>
+            <div class="settings-hint">
+              Gdy włączone, każda nowo dodana aktywność w Twoim prywatnym planie
+              dostaje automatycznie ustawione przypomnienie — bez zaznaczania tego
+              ręcznie w formularzu. Nie dotyczy planów grupowych.
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" name="enabled" onchange="this.form.requestSubmit()" {% if current_user.notify_new_activities %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </form>
+
+      <form method="POST" action="{{ url_for('notifications.update_new_activities_minutes') }}" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <label class="form-label" for="new-activities-minutes" style="margin:0">Domyślnie przypominaj</label>
+        <select class="form-control" id="new-activities-minutes" name="minutes" style="max-width:180px;width:auto">
+          <option value="5" {% if current_user.notify_new_activities_minutes == 5 %}selected{% endif %}>5 minut przed</option>
+          <option value="15" {% if current_user.notify_new_activities_minutes == 15 %}selected{% endif %}>15 minut przed</option>
+          <option value="30" {% if current_user.notify_new_activities_minutes == 30 %}selected{% endif %}>30 minut przed</option>
+          <option value="60" {% if current_user.notify_new_activities_minutes == 60 %}selected{% endif %}>1 godzinę przed</option>
+          <option value="120" {% if current_user.notify_new_activities_minutes == 120 %}selected{% endif %}>2 godziny przed</option>
+          <option value="1440" {% if current_user.notify_new_activities_minutes == 1440 %}selected{% endif %}>1 dzień przed</option>
+        </select>
+        <button type="submit" class="btn btn-outline btn-sm">Zapisz</button>
+      </form>
+
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:10px">
+          Chcesz przypomnienia dla wszystkich JUŻ ISTNIEJĄCYCH, nadchodzących
+          aktywności w swoim planie naraz? Ustaw to tutaj — zadziała tylko dla
+          Twojego własnego, prywatnego planu (plany grup i przeszłe aktywności
+          zostają bez zmian).
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="form-control" id="notify-all-minutes" style="max-width:180px;width:auto">
+            <option value="5">5 minut przed</option>
+            <option value="15">15 minut przed</option>
+            <option value="30" selected>30 minut przed</option>
+            <option value="60">1 godzinę przed</option>
+            <option value="120">2 godziny przed</option>
+            <option value="1440">1 dzień przed</option>
+          </select>
+          <button type="button" class="btn btn-secondary" id="notify-all-btn" onclick="enableNotifyForAllActivities()">
+            🔔 Włącz dla wszystkich aktywności
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>🧩 Powiadomienia z grup</h3></div>
+    <div class="card-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+        Decyduje, czy dostajesz powiadomienia push, gdy ktoś doda nową
+        aktywność w planie grupy, do której należysz.
+      </p>
+      <form method="POST" action="{{ url_for('notifications.update_group_pref') }}">
+        <div class="form-group" style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="group_notification_pref" value="none" {% if current_user.group_notification_pref == 'none' %}checked{% endif %} onchange="this.form.requestSubmit()">
+            Brak — nie powiadamiaj o żadnej grupie
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="group_notification_pref" value="all" {% if current_user.group_notification_pref == 'all' %}checked{% endif %} onchange="this.form.requestSubmit()">
+            Wszystkie — powiadamiaj o każdej grupie, do której należę
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="group_notification_pref" value="selected" {% if current_user.group_notification_pref == 'selected' %}checked{% endif %} onchange="this.form.requestSubmit()">
+            Tylko wybrane — powiadamiaj wyłącznie o grupach, które włączę poniżej
+          </label>
+        </div>
+      </form>
+
+      {% if current_user.group_notification_pref == 'selected' %}
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          {% if groups %}
+            {% for group in groups %}
+              {% set membership = memberships.get(group.id) %}
+              <div class="settings-row" style="padding:8px 0;">
+                <div class="settings-label">{{ group.name }}</div>
+                <form method="POST" action="{{ url_for('groups.toggle_notifications', group_id=group.id) }}">
+                  <input type="hidden" name="next" value="{{ url_for('notifications.settings') }}">
+                  <label class="switch">
+                    <input type="checkbox" onchange="this.form.requestSubmit()" {% if membership and membership.notifications_enabled %}checked{% endif %}>
+                    <span class="slider"></span>
+                  </label>
+                </form>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="list-item-sub">Nie należysz jeszcze do żadnej grupy.</div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

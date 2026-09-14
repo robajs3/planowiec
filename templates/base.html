@@ -67,6 +67,9 @@
         <a class="nav-item {% if request.blueprint == 'groups' %}active{% endif %}" href="{{ url_for('groups.index') }}">
           <span class="nav-icon">🧩</span> Grupy
         </a>
+        <a class="nav-item {% if request.blueprint == 'notifications' %}active{% endif %}" href="{{ url_for('notifications.index') }}">
+          <span class="nav-icon">🔔</span> Powiadomienia
+        </a>
         <a class="nav-item {% if request.blueprint == 'import_koloseum' %}active{% endif %}" href="{{ url_for('import_koloseum.index') }}">
           <span class="nav-icon">🏛️</span> Import z koloseum
         </a>

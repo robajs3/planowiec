@@ -5,7 +5,7 @@ from flask_login import LoginManager, current_user, login_user
 
 from config import Config
 from models import db, User
-from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp
+from controllers import auth_bp, dashboard_bp, friends_bp, groups_bp, profile_bp, admin_bp, import_bp, notifications_bp
 from services.activity_service import ActivityService
 from services.reminder_scheduler import start_reminder_scheduler
 import sso_client
@@ -100,6 +100,7 @@ def create_app(config_class=Config) -> Flask:
     app.register_blueprint(profile_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(import_bp)
+    app.register_blueprint(notifications_bp)
 
     @app.route("/")
     def root():
@@ -179,6 +180,10 @@ def _ensure_new_columns(app: Flask) -> None:
         "users": [
             ("show_all_plans", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("push_subscription", "TEXT"),
+            ("notify_new_activities", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("notify_new_activities_minutes", "INTEGER NOT NULL DEFAULT 30"),
+            ("group_notification_pref", "VARCHAR(20) NOT NULL DEFAULT 'all'"),
+            ("notifications_muted_until", "TIMESTAMP"),
         ],
         "activity_types": [("group_id", "INTEGER")],
         "activities": [
@@ -188,6 +193,7 @@ def _ensure_new_columns(app: Flask) -> None:
             ("reminder_sent_at", "TIMESTAMP"),
         ],
         "plan_access": [("role", "VARCHAR(20) NOT NULL DEFAULT 'viewer'")],
+        "group_members": [("notifications_enabled", "BOOLEAN NOT NULL DEFAULT TRUE")],
     }
 
     with db.engine.begin() as conn:
