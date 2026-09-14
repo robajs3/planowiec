@@ -143,48 +143,51 @@
   <div class="card">
     <div class="card-header"><h3>🧩 Powiadomienia z grup</h3></div>
     <div class="card-body">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
-        Decyduje, czy dostajesz powiadomienia push, gdy ktoś doda nową
-        aktywność w planie grupy, do której należysz.
-      </p>
       <form method="POST" action="{{ url_for('notifications.update_group_pref') }}">
-        <div class="form-group" style="display:flex;flex-direction:column;gap:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="radio" name="group_notification_pref" value="none" {% if current_user.group_notification_pref == 'none' %}checked{% endif %} onchange="this.form.requestSubmit()">
-            Brak — nie powiadamiaj o żadnej grupie
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="radio" name="group_notification_pref" value="all" {% if current_user.group_notification_pref == 'all' %}checked{% endif %} onchange="this.form.requestSubmit()">
-            Wszystkie — powiadamiaj o każdej grupie, do której należę
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="radio" name="group_notification_pref" value="selected" {% if current_user.group_notification_pref == 'selected' %}checked{% endif %} onchange="this.form.requestSubmit()">
-            Tylko wybrane — powiadamiaj wyłącznie o grupach, które włączę poniżej
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Powiadamiaj o grupach</div>
+            <div class="settings-hint">
+              Główny wyłącznik — gdy wyłączony, nie dostajesz żadnych
+              powiadomień z żadnej grupy, niezależnie od ustawień
+              poszczególnych grup poniżej.
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" name="enabled" onchange="this.form.requestSubmit()" {% if current_user.group_notification_pref != 'none' %}checked{% endif %}>
+            <span class="slider"></span>
           </label>
         </div>
       </form>
 
-      {% if current_user.group_notification_pref == 'selected' %}
-        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-          {% if groups %}
-            {% for group in groups %}
-              {% set membership = memberships.get(group.id) %}
-              <div class="settings-row" style="padding:8px 0;">
-                <div class="settings-label">{{ group.name }}</div>
-                <form method="POST" action="{{ url_for('groups.toggle_notifications', group_id=group.id) }}">
-                  <input type="hidden" name="next" value="{{ url_for('notifications.settings') }}">
-                  <label class="switch">
-                    <input type="checkbox" onchange="this.form.requestSubmit()" {% if membership and membership.notifications_enabled %}checked{% endif %}>
-                    <span class="slider"></span>
-                  </label>
-                </form>
-              </div>
-            {% endfor %}
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);{% if current_user.group_notification_pref == 'none' %}opacity:.5;{% endif %}">
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:10px">
+          {% if current_user.group_notification_pref == 'none' %}
+            Włącz wyłącznik powyżej, żeby móc wybrać, z których grup chcesz
+            dostawać powiadomienia.
           {% else %}
-            <div class="list-item-sub">Nie należysz jeszcze do żadnej grupy.</div>
+            Dla każdej grupy z osobna: powiadamiaj o nowych aktywnościach,
+            przypomnieniach i komentarzach, albo wycisz tylko tę jedną grupę.
           {% endif %}
-        </div>
-      {% endif %}
+        </p>
+        {% if groups %}
+          {% for group in groups %}
+            {% set membership = memberships.get(group.id) %}
+            <div class="settings-row" style="padding:8px 0;">
+              <div class="settings-label">{{ group.name }}</div>
+              <form method="POST" action="{{ url_for('groups.toggle_notifications', group_id=group.id) }}">
+                <input type="hidden" name="next" value="{{ url_for('notifications.settings') }}">
+                <label class="switch">
+                  <input type="checkbox" onchange="this.form.requestSubmit()" {% if current_user.group_notification_pref == 'none' %}disabled{% endif %} {% if membership and membership.notifications_enabled %}checked{% endif %}>
+                  <span class="slider"></span>
+                </label>
+              </form>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="list-item-sub">Nie należysz jeszcze do żadnej grupy.</div>
+        {% endif %}
+      </div>
     </div>
   </div>
 

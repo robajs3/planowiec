@@ -135,6 +135,25 @@ class NotificationService:
             return False
 
     @staticmethod
+    def _group_notifications_allowed(user, member: "GroupMember") -> bool:
+        """Czy dany użytkownik powinien dostać JAKIEKOLWIEK powiadomienie
+        push związane z TĄ grupą (nowa aktywność / przypomnienie /
+        komentarz) — wspólna reguła dla wszystkich trzech typów powiadomień
+        grupowych.
+
+        Model (Ustawienia -> Powiadomienia -> Powiadomienia z grup):
+          - master switch (User.group_notification_pref == "none") — gdy
+            wyłączony, użytkownik nie dostaje ŻADNYCH powiadomień z ŻADNEJ
+            grupy, niezależnie od przełączników pojedynczych grup;
+          - gdy master jest włączony, o KAŻDEJ grupie z osobna decyduje jej
+            przełącznik GroupMember.notifications_enabled (domyślnie True) —
+            można więc mieć np. powiadomienia włączone globalnie, ale
+            wyciszone dla jednej konkretnej, głośnej grupy."""
+        if user.group_notification_pref == "none":
+            return False
+        return member.notifications_enabled
+
+    @staticmethod
     def send_activity_reminder(activity) -> bool:
         """Wysyła przypomnienie o zbliżającej się aktywności.
 
@@ -163,9 +182,7 @@ class NotificationService:
     def _send_group_activity_reminder(activity) -> int:
         """Wysyła przypomnienie o aktywności grupowej do wszystkich członków
         grupy, zgodnie z ich indywidualnymi ustawieniami powiadomień z grup
-        (User.group_notification_pref / GroupMember.notifications_enabled —
-        te same, co przy powiadomieniu o nowej aktywności, patrz
-        `notify_group_new_activity`). Zwraca liczbę wysłanych push."""
+        (patrz `_group_notifications_allowed`). Zwraca liczbę wysłanych push."""
         prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
         when = activity.start_time.strftime("%H:%M")
         body = f"{when}" + (f" — {activity.location}" if activity.location else "")
@@ -175,12 +192,7 @@ class NotificationService:
         sent = 0
         for member in members:
             user = member.user
-            if not user:
-                continue
-            pref = user.group_notification_pref
-            if pref == "none":
-                continue
-            if pref == "selected" and not member.notifications_enabled:
+            if not user or not NotificationService._group_notifications_allowed(user, member):
                 continue
             if NotificationService.send_push(
                 user, f"⏰ {activity.title}", body, link=link, kind="reminder",
@@ -191,14 +203,12 @@ class NotificationService:
     @staticmethod
     def notify_group_new_activity(activity) -> int:
         """Powiadamia członków grupy o nowo dodanej aktywności w jej planie,
-        zgodnie z indywidualnymi ustawieniami każdego z nich:
-          - User.group_notification_pref == "none"     -> pomiń
-          - User.group_notification_pref == "all"      -> powiadom
-          - User.group_notification_pref == "selected" -> powiadom tylko,
-            gdy GroupMember.notifications_enabled == True dla TEJ grupy
-        Autor aktywności (activity.owner_id — dla wpisów grupowych to pole
-        przechowuje twórcę, patrz komentarz w dashboard_controller) nie
-        dostaje powiadomienia o własnym wpisie. Zwraca liczbę wysłanych push.
+        zgodnie z indywidualnymi ustawieniami każdego z nich — patrz
+        `_group_notifications_allowed` (master switch + przełącznik per
+        grupa). Autor aktywności (activity.owner_id — dla wpisów grupowych
+        to pole przechowuje twórcę, patrz komentarz w dashboard_controller)
+        nie dostaje powiadomienia o własnym wpisie. Zwraca liczbę wysłanych
+        push.
         """
         if activity.group_id is None:
             return 0
@@ -213,12 +223,7 @@ class NotificationService:
             if member.user_id == activity.owner_id:
                 continue
             user = member.user
-            if not user:
-                continue
-            pref = user.group_notification_pref
-            if pref == "none":
-                continue
-            if pref == "selected" and not member.notifications_enabled:
+            if not user or not NotificationService._group_notifications_allowed(user, member):
                 continue
             if NotificationService.send_push(user, title, body, link=link, kind="group_activity"):
                 sent += 1
@@ -250,12 +255,7 @@ class NotificationService:
                 if member.user_id == comment.author_id:
                     continue
                 user = member.user
-                if not user:
-                    continue
-                pref = user.group_notification_pref
-                if pref == "none":
-                    continue
-                if pref == "selected" and not member.notifications_enabled:
+                if not user or not NotificationService._group_notifications_allowed(user, member):
                     continue
                 recipients.append(user)
         else:

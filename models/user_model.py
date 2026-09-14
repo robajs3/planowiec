@@ -44,12 +44,13 @@ class User(UserMixin, db.Model):
     notify_new_activities = db.Column(db.Boolean, default=False, nullable=False)
     notify_new_activities_minutes = db.Column(db.Integer, default=30, nullable=False)
 
-    # Preferencja powiadomień o nowych aktywnościach w planach GRUP, do
-    # których użytkownik należy:
-    #   "none"     – nigdy nie powiadamiaj o niczym z grup
-    #   "all"      – powiadamiaj o wszystkich grupach (domyślne)
-    #   "selected" – tylko te grupy, które użytkownik oznaczył dzwonkiem
-    #                (patrz GroupMember.notifications_enabled)
+    # Główny wyłącznik powiadomień z GRUP (nowe aktywności, przypomnienia,
+    # komentarze), do których użytkownik należy:
+    #   "none"     – wyłączone, nie powiadamiaj o niczym z żadnej grupy
+    #   "selected" – włączone; o KAŻDEJ grupie z osobna decyduje wtedy jej
+    #                własny przełącznik (patrz GroupMember.notifications_enabled)
+    # Historyczna wartość "all" (z wcześniejszej wersji z 3 trybami) jest
+    # nadal traktowana jak "selected" — patrz NotificationService._group_notifications_allowed.
     group_notification_pref = db.Column(db.String(20), default="all", nullable=False)
 
     # Gdy True (domyślnie) — użytkownik dostaje powiadomienie push, gdy ktoś

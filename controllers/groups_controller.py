@@ -69,10 +69,11 @@ def detail(group_id):
 @groups_bp.route("/groups/<int:group_id>/notifications", methods=["POST"])
 @login_required
 def toggle_notifications(group_id):
-    """Włącza/wyłącza powiadomienia o nowych aktywnościach w TEJ grupie dla
-    zalogowanego użytkownika. Ma znaczenie tylko, gdy jego globalna
-    preferencja (Profil → Powiadomienia → Ustawienia) to „tylko wybrane
-    grupy" — przy „wszystkie"/„brak" ta flaga jest ignorowana."""
+    """Włącza/wyłącza powiadomienia z TEJ grupy (nowe aktywności,
+    przypomnienia, komentarze) dla zalogowanego użytkownika. Ma znaczenie
+    tylko, gdy jego główny wyłącznik (Powiadomienia → Ustawienia →
+    Powiadomienia z grup) jest włączony — gdy wyłączony, blokuje
+    powiadomienia ze WSZYSTKICH grup niezależnie od tej flagi."""
     membership = GroupService.get_membership(current_user.id, group_id)
     if not membership:
         abort(403)

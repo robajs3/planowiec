@@ -7,8 +7,6 @@ from services.group_service import GroupService
 
 notifications_bp = Blueprint("notifications", __name__)
 
-GROUP_NOTIFICATION_PREFS = ("none", "all", "selected")
-
 # Opcje czasu wyciszenia pokazywane w formularzu — (etykieta, minuty).
 # Zgodnie z wymaganiem: maksymalnie 1 dzień (MAX_MUTE_MINUTES = 1440).
 MUTE_OPTIONS = [
@@ -131,12 +129,17 @@ def update_comments_pref():
 @notifications_bp.route("/notifications/settings/groups", methods=["POST"])
 @login_required
 def update_group_pref():
-    pref = request.form.get("group_notification_pref", "all")
-    if pref not in GROUP_NOTIFICATION_PREFS:
-        pref = "all"
-    current_user.group_notification_pref = pref
+    """Master switch: włącza/wyłącza WSZYSTKIE powiadomienia z grup naraz.
+    Gdy włączony, o każdej grupie z osobna nadal decyduje jej przełącznik
+    (patrz groups.toggle_notifications) — ten switch jest nadrzędnym
+    wyłącznikiem, a nie kolejnym trybem do wyboru."""
+    current_user.group_notification_pref = "selected" if request.form.get("enabled") == "on" else "none"
     db.session.commit()
-    flash("Zaktualizowano ustawienia powiadomień z grup.", "success")
+    flash(
+        "Włączono powiadomienia z grup." if current_user.group_notification_pref != "none"
+        else "Wyłączono wszystkie powiadomienia z grup.",
+        "success",
+    )
     return redirect(url_for("notifications.settings"))
 
 
