@@ -108,6 +108,23 @@ def update_new_activities_minutes():
 
 
 # ---------------------------------------------------------------------------
+# Ustawienia — powiadomienia o komentarzach
+# ---------------------------------------------------------------------------
+
+@notifications_bp.route("/notifications/settings/comments", methods=["POST"])
+@login_required
+def update_comments_pref():
+    current_user.notify_comments = request.form.get("enabled") == "on"
+    db.session.commit()
+    flash(
+        "Włączono powiadomienia o komentarzach." if current_user.notify_comments
+        else "Wyłączono powiadomienia o komentarzach.",
+        "success",
+    )
+    return redirect(url_for("notifications.settings"))
+
+
+# ---------------------------------------------------------------------------
 # Ustawienia — powiadomienia z grup
 # ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 from datetime import datetime, date
 
-from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, abort, redirect, url_for, current_app
 
 from flask_login import login_required, current_user
 
@@ -483,6 +483,16 @@ def api_add_comment(activity_id):
     comment = ActivityComment(activity_id=activity.id, author_id=current_user.id, content=content)
     db.session.add(comment)
     db.session.commit()
+
+    # Powiadomienie push o nowym komentarzu (właściciel planu / członkowie
+    # grupy — patrz NotificationService.notify_new_comment). Brak
+    # powiadomienia nie może zepsuć dodania komentarza.
+    try:
+        from services.notification_service import NotificationService
+        NotificationService.notify_new_comment(comment, activity)
+    except Exception:
+        current_app.logger.exception(f"Nie udało się wysłać powiadomienia o komentarzu {comment.id}")
+
     return jsonify(comment.to_dict()), 201
 
 

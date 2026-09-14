@@ -52,6 +52,14 @@ class User(UserMixin, db.Model):
     #                (patrz GroupMember.notifications_enabled)
     group_notification_pref = db.Column(db.String(20), default="all", nullable=False)
 
+    # Gdy True (domyślnie) — użytkownik dostaje powiadomienie push, gdy ktoś
+    # doda komentarz do jego aktywności (plan prywatny/znajomego) albo do
+    # dowolnej aktywności w planie grupy, do której należy (patrz
+    # NotificationService.notify_new_comment). Niezależny przełącznik od
+    # `group_notification_pref` (ten dotyczy tylko NOWYCH AKTYWNOŚCI w
+    # grupach, nie komentarzy).
+    notify_comments = db.Column(db.Boolean, default=True, nullable=False)
+
     # Chwilowe wyciszenie WSZYSTKICH powiadomień push (niezależnie od źródła)
     # do podanego momentu w czasie — NULL, gdy wyciszenie nieaktywne. Ustawiane
     # przez /notifications/mute (max 1 dzień), kasowane przez /notifications/unmute.

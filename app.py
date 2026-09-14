@@ -184,6 +184,7 @@ def _ensure_new_columns(app: Flask) -> None:
             ("notify_new_activities_minutes", "INTEGER NOT NULL DEFAULT 30"),
             ("group_notification_pref", "VARCHAR(20) NOT NULL DEFAULT 'all'"),
             ("notifications_muted_until", "TIMESTAMP"),
+            ("notify_comments", "BOOLEAN NOT NULL DEFAULT TRUE"),
         ],
         "activity_types": [("group_id", "INTEGER")],
         "activities": [
