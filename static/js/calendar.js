@@ -869,26 +869,28 @@
     document.getElementById("activity-location").value = activity ? activity.location : "";
     document.getElementById("activity-all-day").checked = activity ? activity.all_day : false;
 
-    // Przypomnienia push mają sens tylko dla planu z JEDNYM właścicielem
-    // (własny/znajomego) — plan grupy nie ma jednej osoby do powiadomienia,
-    // więc dla group_id ukrywamy całą opcję zamiast pokazywać coś, co i tak
-    // nigdy się nie wyśle (patrz NotificationService.send_activity_reminder).
+    // Przypomnienia push: dla planu z jednym właścicielem (własny/znajomego)
+    // trafiają do niego, a dla planu GRUPY — do wszystkich jej członków,
+    // zgodnie z ich ustawieniami powiadomień z grup (patrz
+    // NotificationService.send_activity_reminder / _send_group_activity_reminder).
+    // Etykieta checkboxa dostosowuje się do kontekstu, żeby było jasne, kto
+    // dostanie przypomnienie.
     const notifyRow = actNotifyEnabled.closest(".form-group");
-    if (editCtx.context === "group") {
-      notifyRow.style.display = "none";
-      actNotifyMinutesRow.style.display = "none";
-      actNotifyEnabled.checked = false;
-    } else {
-      notifyRow.style.display = "flex";
-      const minutes = activity ? activity.notify_before_minutes : null;
-      actNotifyEnabled.checked = !!minutes;
-      actNotifyMinutesRow.style.display = minutes ? "block" : "none";
-      if (minutes) actNotifyMinutes.value = String(minutes);
-      // Odświeżamy stan checkboxa (klikalny/zablokowany) i podpowiedź przy
-      // każdym otwarciu — użytkownik mógł od poprzedniego razu zmienić
-      // uprawnienia do powiadomień w przeglądarce.
-      updateNotifyAvailability();
+    const notifyLabel = document.querySelector('label[for="activity-notify-enabled"]');
+    notifyRow.style.display = "flex";
+    if (notifyLabel) {
+      notifyLabel.textContent = editCtx.context === "group"
+        ? "🔔 Powiadom grupę przed aktywnością"
+        : "🔔 Powiadom przed aktywnością";
     }
+    const minutes = activity ? activity.notify_before_minutes : null;
+    actNotifyEnabled.checked = !!minutes;
+    actNotifyMinutesRow.style.display = minutes ? "block" : "none";
+    if (minutes) actNotifyMinutes.value = String(minutes);
+    // Odświeżamy stan checkboxa (klikalny/zablokowany) i podpowiedź przy
+    // każdym otwarciu — użytkownik mógł od poprzedniego razu zmienić
+    // uprawnienia do powiadomień w przeglądarce.
+    updateNotifyAvailability();
 
     let startDate = activity ? new Date(activity.start) : (presetDate ? new Date(presetDate) : new Date());
     let endDate = activity ? new Date(activity.end) : new Date(startDate.getTime() + 60 * 60 * 1000);

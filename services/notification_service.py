@@ -136,10 +136,17 @@ class NotificationService:
 
     @staticmethod
     def send_activity_reminder(activity) -> bool:
-        """Wysyła przypomnienie o konkretnej aktywności do jej właściciela
-        (tylko plany prywatne — group_id is None; aktywności grupowe nie
-        mają jednego właściciela do powiadomienia, patrz reminder_scheduler)."""
-        if not activity.owner_id or activity.group_id is not None:
+        """Wysyła przypomnienie o zbliżającej się aktywności.
+
+        Dla planu prywatnego (group_id is None) — do jego właściciela.
+        Dla planu GRUPY — do wszystkich członków grupy (zgodnie z ich
+        ustawieniami powiadomień z grup, patrz
+        `_send_group_activity_reminder`), łącznie z autorem wpisu — w
+        odróżnieniu od `notify_group_new_activity` to przypomnienie "zaraz
+        się zaczyna", więc dotyczy również osoby, która je utworzyła."""
+        if activity.group_id is not None:
+            return NotificationService._send_group_activity_reminder(activity) > 0
+        if not activity.owner_id:
             return False
         prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
         when = activity.start_time.strftime("%H:%M")
@@ -151,6 +158,35 @@ class NotificationService:
             link=f"{prefix}/dashboard/",
             kind="reminder",
         )
+
+    @staticmethod
+    def _send_group_activity_reminder(activity) -> int:
+        """Wysyła przypomnienie o aktywności grupowej do wszystkich członków
+        grupy, zgodnie z ich indywidualnymi ustawieniami powiadomień z grup
+        (User.group_notification_pref / GroupMember.notifications_enabled —
+        te same, co przy powiadomieniu o nowej aktywności, patrz
+        `notify_group_new_activity`). Zwraca liczbę wysłanych push."""
+        prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
+        when = activity.start_time.strftime("%H:%M")
+        body = f"{when}" + (f" — {activity.location}" if activity.location else "")
+        link = f"{prefix}/dashboard/group/{activity.group_id}"
+
+        members = GroupMember.query.filter_by(group_id=activity.group_id).all()
+        sent = 0
+        for member in members:
+            user = member.user
+            if not user:
+                continue
+            pref = user.group_notification_pref
+            if pref == "none":
+                continue
+            if pref == "selected" and not member.notifications_enabled:
+                continue
+            if NotificationService.send_push(
+                user, f"⏰ {activity.title}", body, link=link, kind="reminder",
+            ):
+                sent += 1
+        return sent
 
     @staticmethod
     def notify_group_new_activity(activity) -> int:
@@ -185,5 +221,52 @@ class NotificationService:
             if pref == "selected" and not member.notifications_enabled:
                 continue
             if NotificationService.send_push(user, title, body, link=link, kind="group_activity"):
+                sent += 1
+        return sent
+
+    @staticmethod
+    def notify_new_comment(comment, activity) -> int:
+        """Powiadamia o nowym komentarzu do aktywności:
+          - plan GRUPY -> wszystkich członków grupy poza autorem komentarza,
+            zgodnie z ich ustawieniami powiadomień z grup (jak przy nowej
+            aktywności, patrz `notify_group_new_activity`);
+          - plan prywatny/znajomego -> właściciela planu, o ile to nie on
+            sam skomentował.
+        W obu przypadkach respektuje indywidualny przełącznik
+        `User.notify_comments` (Ustawienia -> Powiadomienia -> Komentarze) —
+        gdy wyłączony, dany użytkownik jest pomijany całkowicie (bez push i
+        bez wpisu w historii), analogicznie do pref="none" przy grupach.
+        Zwraca liczbę wysłanych push."""
+        prefix = (current_app.config.get("PREFIX") or "").rstrip("/")
+        author_name = comment.author.name if comment.author else "Ktoś"
+        title = f"💬 {author_name} skomentował(a): {activity.title}"
+        body = comment.content if len(comment.content) <= 140 else comment.content[:137] + "…"
+
+        recipients = []
+        if activity.group_id is not None:
+            link = f"{prefix}/dashboard/group/{activity.group_id}"
+            members = GroupMember.query.filter_by(group_id=activity.group_id).all()
+            for member in members:
+                if member.user_id == comment.author_id:
+                    continue
+                user = member.user
+                if not user:
+                    continue
+                pref = user.group_notification_pref
+                if pref == "none":
+                    continue
+                if pref == "selected" and not member.notifications_enabled:
+                    continue
+                recipients.append(user)
+        else:
+            link = f"{prefix}/dashboard/"
+            if activity.owner and activity.owner_id != comment.author_id:
+                recipients.append(activity.owner)
+
+        sent = 0
+        for user in recipients:
+            if not user.notify_comments:
+                continue
+            if NotificationService.send_push(user, title, body, link=link, kind="comment"):
                 sent += 1
         return sent

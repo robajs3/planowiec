@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from models import db, ActivityType, Activity, User, DEFAULT_ACTIVITY_TYPES
+from services.time_utils import local_now
 
 RECURRENCE_NONE = "none"
 RECURRENCE_DAILY = "daily"
@@ -247,8 +248,12 @@ class ActivityService:
         # planu ma włączony switch "powiadamiaj o wszystkich nowo dodanych
         # aktywnościach" (User.notify_new_activities), włączamy je automatycznie
         # z jego domyślną liczbą minut — bez potrzeby zaznaczania tego ręcznie
-        # przy każdym wpisie. Aktywności grupowe pomijamy celowo (patrz
-        # NotificationService.send_activity_reminder — nie mają jednego adresata).
+        # przy każdym wpisie. Aktywności grupowe pomijamy celowo TYLKO w tym
+        # automatycznym trybie — w grupie nie ma jednego "właściciela", którego
+        # prywatna preferencja mogłaby decydować za wszystkich; w grupach
+        # przypomnienie trzeba więc zaznaczyć jawnie w formularzu (wysyłane
+        # jest wtedy do wszystkich członków, patrz
+        # NotificationService.send_activity_reminder).
         if notify_before_minutes is None and group_id is None:
             owner = User.query.get(owner_id)
             if owner and owner.notify_new_activities:
@@ -381,14 +386,17 @@ class ActivityService:
         wszystkich aktywności" w Profilu, żeby nie trzeba było ustawiać tego
         osobno w każdym evencie.
 
-        Aktywności grupowe pomijamy celowo — nie mają jednego adresata do
-        powiadomienia (patrz NotificationService.send_activity_reminder).
+        Aktywności grupowe pomijamy celowo — to masowa akcja z Profilu jednego
+        użytkownika, więc nie powinna po cichu włączać przypomnień (widocznych
+        dla WSZYSTKICH członków, patrz NotificationService.send_activity_reminder)
+        na aktywnościach, których dany user nawet nie utworzył. Dla grup
+        przypomnienie trzeba ustawić jawnie w formularzu każdej aktywności.
         Przeszłe aktywności też pomijamy — scheduler i tak nigdy by ich nie
         wysłał (patrz reminder_scheduler.py: warunek start_time > now), więc
         ustawianie im przypomnienia byłoby zwodnicze.
 
         Zwraca liczbę zaktualizowanych aktywności."""
-        now = datetime.now()
+        now = local_now()
         activities = (
             Activity.query
             .filter(

@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from models import db, Activity
 from services.notification_service import NotificationService
+from services.time_utils import local_now
 
 CHECK_INTERVAL_SECONDS = 60
 
@@ -39,19 +40,24 @@ def _check_and_send_due_reminders(app):
     with app.app_context():
         # Naiwny czas lokalny (patrz komentarz w Activity.start_time) — cały
         # projekt konsekwentnie trzyma start_time jako "wall clock", więc
-        # tutaj też porównujemy z naiwnym "teraz", a nie z UTC.
-        now = datetime.now()
+        # tutaj też porównujemy z naiwnym "teraz" w tej samej konwencji, a
+        # nie z UTC. UWAGA: `local_now()` (a NIE `datetime.now()`) — patrz
+        # services/time_utils.py po wyjaśnienie, dlaczego zwykłe
+        # `datetime.now()` dawało przypomnienia przesunięte o 1-2h.
+        now = local_now()
 
         # Okno wyszukiwania: aktywności, których termin przypomnienia
         # (start_time - notify_before_minutes) już nadszedł, ale sama
         # aktywność jeszcze się nie zaczęła (nie ma sensu przypominać o
         # czymś, co już trwa/minęło — np. po dłuższym przestoju appki).
+        # Dotyczy zarówno aktywności prywatnych, jak i grupowych —
+        # NotificationService.send_activity_reminder sam rozróżnia adresata
+        # (właściciel planu vs wszyscy członkowie grupy).
         candidates = (
             Activity.query
             .filter(
                 Activity.notify_before_minutes.isnot(None),
                 Activity.reminder_sent_at.is_(None),
-                Activity.group_id.is_(None),  # patrz NotificationService.send_activity_reminder
                 Activity.start_time > now,
             )
             .all()
