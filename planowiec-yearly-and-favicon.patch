@@ -1,0 +1,66 @@
+diff --git a/services/activity_service.py b/services/activity_service.py
+index 5f3ac83..e3897dd 100644
+--- a/services/activity_service.py
++++ b/services/activity_service.py
+@@ -7,10 +7,14 @@ RECURRENCE_NONE = "none"
+ RECURRENCE_DAILY = "daily"
+ RECURRENCE_WEEKLY = "weekly"
+ RECURRENCE_MONTHLY = "monthly"
+-ALL_RECURRENCES = [RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY]
++RECURRENCE_YEARLY = "yearly"
++ALL_RECURRENCES = [RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY, RECURRENCE_YEARLY]
+ 
+ # Bezpiecznik, żeby literówka w dacie zakończenia serii (albo jej brak przy
+-# cyklu dziennym) nie wygenerowała nieograniczonej liczby wpisów.
++# cyklu dziennym) nie wygenerowała nieograniczonej liczby wpisów. Przy cyklu
++# rocznym i braku podanej daty/liczby powtórzeń to i tak wymusza podanie
++# jednego z nich (patrz create_activity) — limit tu jest tylko ochroną przed
++# nieskończoną pętlą, nie realnym scenariuszem użycia.
+ MAX_RECURRENCE_OCCURRENCES = 366
+ 
+ 
+@@ -29,6 +33,14 @@ def _add_interval(dt: datetime, rule: str, step: int) -> datetime:
+         import calendar
+         day = min(dt.day, calendar.monthrange(year, month)[1])
+         return dt.replace(year=year, month=month, day=day)
++    if rule == RECURRENCE_YEARLY:
++        # Analogicznie do miesięcznego: zachowujemy dzień, obcinając do
++        # ostatniego dnia lutego, gdy oryginał to 29 lutego, a rok docelowy
++        # nie jest przestępny (np. urodziny w roku przestępnym).
++        year = dt.year + step
++        import calendar
++        day = min(dt.day, calendar.monthrange(year, dt.month)[1])
++        return dt.replace(year=year, day=day)
+     return dt
+ 
+ 
+diff --git a/templates/base.html b/templates/base.html
+index 239a24d..a15ee44 100644
+--- a/templates/base.html
++++ b/templates/base.html
+@@ -8,6 +8,13 @@
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+ 
++  <!-- Favicon karty przeglądarki — te same ikony co PWA (static/img),
++       więc jeden spójny znak firmowy wszędzie: karta, zakładki, ekran
++       główny po instalacji. -->
++  <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='img/icon-96.png') }}">
++  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/icon-72.png') }}">
++  <link rel="shortcut icon" href="{{ url_for('static', filename='img/icon-96.png') }}">
++
+   <!-- PWA: manifest + ikony, żeby appkę dało się zainstalować z ekranu
+        głównego (Android/desktop Chrome) lub "Dodaj do ekranu początkowego"
+        (iOS Safari). -->
+diff --git a/templates/dashboard/index.html b/templates/dashboard/index.html
+index 475f326..276428c 100644
+--- a/templates/dashboard/index.html
++++ b/templates/dashboard/index.html
+@@ -159,6 +159,7 @@
+             <option value="daily">Codziennie</option>
+             <option value="weekly">Co tydzień</option>
+             <option value="monthly">Co miesiąc</option>
++            <option value="yearly">Co rok</option>
+           </select>
+           <div class="form-row" id="activity-recurrence-until-row" style="display:none; margin-top:8px;">
+             <div class="form-group">

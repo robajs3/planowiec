@@ -8,6 +8,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 
+  <!-- Favicon karty przeglądarki — te same ikony co PWA (static/img),
+       więc jeden spójny znak firmowy wszędzie: karta, zakładki, ekran
+       główny po instalacji. -->
+  <link rel="icon" type="image/png" sizes="96x96" href="{{ url_for('static', filename='img/icon-96.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/icon-72.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='img/icon-96.png') }}">
+
   <!-- PWA: manifest + ikony, żeby appkę dało się zainstalować z ekranu
        głównego (Android/desktop Chrome) lub "Dodaj do ekranu początkowego"
        (iOS Safari). -->

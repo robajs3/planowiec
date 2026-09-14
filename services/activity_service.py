@@ -7,10 +7,14 @@ RECURRENCE_NONE = "none"
 RECURRENCE_DAILY = "daily"
 RECURRENCE_WEEKLY = "weekly"
 RECURRENCE_MONTHLY = "monthly"
-ALL_RECURRENCES = [RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY]
+RECURRENCE_YEARLY = "yearly"
+ALL_RECURRENCES = [RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY, RECURRENCE_YEARLY]
 
 # Bezpiecznik, żeby literówka w dacie zakończenia serii (albo jej brak przy
-# cyklu dziennym) nie wygenerowała nieograniczonej liczby wpisów.
+# cyklu dziennym) nie wygenerowała nieograniczonej liczby wpisów. Przy cyklu
+# rocznym i braku podanej daty/liczby powtórzeń to i tak wymusza podanie
+# jednego z nich (patrz create_activity) — limit tu jest tylko ochroną przed
+# nieskończoną pętlą, nie realnym scenariuszem użycia.
 MAX_RECURRENCE_OCCURRENCES = 366
 
 
@@ -29,6 +33,14 @@ def _add_interval(dt: datetime, rule: str, step: int) -> datetime:
         import calendar
         day = min(dt.day, calendar.monthrange(year, month)[1])
         return dt.replace(year=year, month=month, day=day)
+    if rule == RECURRENCE_YEARLY:
+        # Analogicznie do miesięcznego: zachowujemy dzień, obcinając do
+        # ostatniego dnia lutego, gdy oryginał to 29 lutego, a rok docelowy
+        # nie jest przestępny (np. urodziny w roku przestępnym).
+        year = dt.year + step
+        import calendar
+        day = min(dt.day, calendar.monthrange(year, dt.month)[1])
+        return dt.replace(year=year, day=day)
     return dt
 
 
