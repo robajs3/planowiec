@@ -647,7 +647,7 @@
 
   dayModalAddBtn.addEventListener("click", () => {
     dayModal.classList.remove("open");
-    openActivityModal(null, selectedDay);
+    openActivityModal(null, selectedDay, { timeOnly: true });
   });
 
   dayModalClearBtn.addEventListener("click", async () => {
@@ -837,7 +837,107 @@
     }
   });
 
-  function openActivityModal(activity, presetDate) {
+  // ---- Daty/godziny w formularzu aktywności ----
+  // Dwa tryby:
+  //  * pełny (przycisk "+ Dodaj aktywność" w rogu, edycja): data + godzina,
+  //  * "z dnia" (dodawanie po kliknięciu w datę): data jest już znana, więc
+  //    użytkownik wybiera tylko godziny. Pola datetime-local pozostają
+  //    ukryte jako źródło prawdy dla payloadu, a pola time je aktualizują.
+  const actStartInput = document.getElementById("activity-start");
+  const actEndInput = document.getElementById("activity-end");
+  const actStartTime = document.getElementById("activity-start-time");
+  const actEndTime = document.getElementById("activity-end-time");
+  const actTimeRow = document.getElementById("activity-time-row");
+  const actDateTimeRow = document.getElementById("activity-datetime-row");
+  const actDayLabelRow = document.getElementById("activity-day-label-row");
+  const actDayLabel = document.getElementById("activity-day-label");
+  const actNextDayHint = document.getElementById("activity-next-day-hint");
+  const HOUR_MS = 60 * 60 * 1000;
+  let timeOnlyMode = false;
+  let timeOnlyDay = null;      // Date (północ) dnia wybranego w kalendarzu
+  let keepDurationOnStart = false; // edycja istniejącej: zachowaj czas trwania
+
+  function parseLocalInput(value) {
+    // "YYYY-MM-DDTHH:MM" -> Date (czas lokalny); null gdy pole niepełne.
+    if (!value) return null;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function timeInputValue(d) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function updateNextDayHint() {
+    const s = parseLocalInput(actStartInput.value);
+    const e = parseLocalInput(actEndInput.value);
+    actNextDayHint.style.display =
+      (timeOnlyMode && s && e && !sameDate(s, e)) ? "block" : "none";
+  }
+
+  function setTimeOnlyMode(on, day) {
+    timeOnlyMode = on;
+    timeOnlyDay = on ? new Date(day.getFullYear(), day.getMonth(), day.getDate()) : null;
+    actTimeRow.style.display = on ? "grid" : "none";
+    actDayLabelRow.style.display = on ? "block" : "none";
+    actDateTimeRow.style.display = on ? "none" : "grid";
+    if (on) {
+      actDayLabel.textContent = day.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    }
+    actNextDayHint.style.display = "none";
+  }
+
+  // Zmiana początku (pełny tryb: data lub godzina) -> koniec = początek + 1 h.
+  // Dzięki temu początek nigdy nie wyląduje po końcu. Przy edycji istniejącej
+  // aktywności zachowujemy jej dotychczasowy czas trwania.
+  let lastStartMs = null;
+  function syncEndFromStart() {
+    const s = parseLocalInput(actStartInput.value);
+    if (!s) return;
+    let duration = HOUR_MS;
+    if (keepDurationOnStart && lastStartMs !== null) {
+      const prevEnd = parseLocalInput(actEndInput.value);
+      if (prevEnd && prevEnd.getTime() > lastStartMs) duration = prevEnd.getTime() - lastStartMs;
+    }
+    lastStartMs = s.getTime();
+    actEndInput.value = toLocalInput(new Date(s.getTime() + duration));
+    if (timeOnlyMode) actEndTime.value = timeInputValue(new Date(s.getTime() + duration));
+    updateNextDayHint();
+  }
+
+  // Tryb "z dnia": zmiana godziny początku.
+  function onStartTimeChange() {
+    if (!actStartTime.value || !timeOnlyDay) return;
+    const [h, m] = actStartTime.value.split(":").map(Number);
+    const s = new Date(timeOnlyDay);
+    s.setHours(h, m, 0, 0);
+    actStartInput.value = toLocalInput(s);
+    syncEndFromStart();
+  }
+
+  // Tryb "z dnia": zmiana godziny końca. Jeśli koniec wypada wcześniej niż
+  // początek, traktujemy go jako godzinę następnego dnia (np. 22:00 -> 01:00).
+  function onEndTimeChange() {
+    if (!actEndTime.value || !timeOnlyDay) return;
+    const s = parseLocalInput(actStartInput.value);
+    if (!s) return;
+    const [h, m] = actEndTime.value.split(":").map(Number);
+    const e = new Date(timeOnlyDay);
+    e.setHours(h, m, 0, 0);
+    if (e.getTime() <= s.getTime()) e.setDate(e.getDate() + 1);
+    actEndInput.value = toLocalInput(e);
+    updateNextDayHint();
+  }
+
+  actStartInput.addEventListener("input", syncEndFromStart);
+  actStartInput.addEventListener("change", syncEndFromStart);
+  actStartTime.addEventListener("input", onStartTimeChange);
+  actStartTime.addEventListener("change", onStartTimeChange);
+  actEndTime.addEventListener("input", onEndTimeChange);
+  actEndTime.addEventListener("change", onEndTimeChange);
+
+  function openActivityModal(activity, presetDate, options) {
     editingActivityId = activity ? activity.id : null;
     editingActivity = activity
       ? { id: activity.id, recurrenceId: activity.recurrence_id, ownerId: activity.owner ? activity.owner.id : null }
@@ -898,8 +998,18 @@
       startDate.setHours(9, 0, 0, 0);
       endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
     }
-    document.getElementById("activity-start").value = toLocalInput(startDate);
-    document.getElementById("activity-end").value = toLocalInput(endDate);
+    actStartInput.value = toLocalInput(startDate);
+    actEndInput.value = toLocalInput(endDate);
+    lastStartMs = startDate.getTime();
+    keepDurationOnStart = !!activity;
+    // Tryb "tylko godziny" dotyczy wyłącznie dodawania po kliknięciu w dzień.
+    const useTimeOnly = !activity && !!(options && options.timeOnly) && !!presetDate;
+    setTimeOnlyMode(useTimeOnly, startDate);
+    if (useTimeOnly) {
+      actStartTime.value = timeInputValue(startDate);
+      actEndTime.value = timeInputValue(endDate);
+      updateNextDayHint();
+    }
     actTypeSelect.value = activity && activity.type ? activity.type.id : (actTypeSelect.options[0] ? actTypeSelect.options[0].value : "");
 
     // Cykliczność ustawiamy tylko przy TWORZENIU nowej aktywności — edycja
@@ -953,6 +1063,13 @@
     const notifyReallyGranted = actNotifyEnabled.checked
       && typeof getPushSupportState === "function"
       && getPushSupportState() === "granted";
+    // Ostatnia linia obrony: koniec nie może być przed początkiem.
+    const startCheck = parseLocalInput(actStartInput.value);
+    const endCheck = parseLocalInput(actEndInput.value);
+    if (startCheck && endCheck && endCheck.getTime() < startCheck.getTime()) {
+      alert("Data zakończenia nie może być wcześniejsza niż data rozpoczęcia.");
+      return;
+    }
     const payload = {
       context: editCtx.context,
       id: editCtx.id,

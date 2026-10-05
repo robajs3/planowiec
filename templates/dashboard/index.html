@@ -114,7 +114,24 @@
           <label class="form-label" for="activity-type">Typ aktywności</label>
           <select class="form-control" id="activity-type"></select>
         </div>
-        <div class="form-row">
+        <!-- Tryb "z dnia": po kliknięciu w datę w kalendarzu data jest znana,
+             więc pokazujemy tylko godziny (patrz calendar.js::setTimeOnlyMode). -->
+        <div class="form-group" id="activity-day-label-row" style="display:none;">
+          <div class="form-label">Data</div>
+          <div id="activity-day-label" style="font-weight:600;"></div>
+        </div>
+        <div class="form-row" id="activity-time-row" style="display:none;">
+          <div class="form-group">
+            <label class="form-label" for="activity-start-time">Początek</label>
+            <input class="form-control" type="time" id="activity-start-time">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="activity-end-time">Koniec</label>
+            <input class="form-control" type="time" id="activity-end-time">
+          </div>
+        </div>
+        <p class="list-item-sub" id="activity-next-day-hint" style="display:none; font-size:.75rem; margin:-6px 0 10px;">Koniec przypada następnego dnia.</p>
+        <div class="form-row" id="activity-datetime-row">
           <div class="form-group">
             <label class="form-label" for="activity-start">Początek</label>
             <input class="form-control" type="datetime-local" id="activity-start" required>
