@@ -71,6 +71,7 @@
           <tr>
             <th style="width:32px;"></th>
             <th>Tytuł</th>
+            <th>Typ</th>
             <th>Przedmiot</th>
             <th>Data</th>
             <th>Miejsce</th>
@@ -88,6 +89,14 @@
               {% if ('koloseum:exam:' ~ exam.id) in already %}
               <span class="nav-badge" title="Ten egzamin był już zaimportowany do Twojego własnego planu — ponowny import nadpisze wpis">już w planie</span>
               {% endif %}
+            </td>
+            <td>
+              {% if exam.exam_type_label or exam.exam_type %}
+              <span style="display:inline-flex; align-items:center; gap:6px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:{{ exam.exam_type_color or '#64748b' }};"></span>
+                {{ exam.exam_type_label or exam.exam_type }}
+              </span>
+              {% else %}—{% endif %}
             </td>
             <td>{{ exam.subject }}</td>
             <td>{{ exam.exam_date[:16].replace('T', ' ') }}</td>

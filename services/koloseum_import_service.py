@@ -10,7 +10,9 @@ Mechanizm:
      — endpoint /api/my-exams (koloseum, bez prefiksu — patrz komentarz w
      fetch_exams), autoryzowany współdzielonym SSO_SECRET jako kluczem API (ten sam wzorzec co LoginHub /api/resolve).
   3. Zaznaczone przez użytkownika egzaminy zapisujemy jako Activity, do
-     własnego planu albo do planu wybranej grupy. Ponowny import TEGO SAMEGO
+     własnego planu albo do planu wybranej grupy. Kategoria wpisu odpowiada
+     typowi terminu w koloseum (Wykład, Egzamin, Laboratoria...) — jest
+     znajdowana po nazwie w planie docelowym albo tworzona z kolorem z koloseum. Ponowny import TEGO SAMEGO
      egzaminu (rozpoznawanego po `external_ref = "koloseum:exam:<id>"`)
      nadpisuje istniejący wpis, zamiast tworzyć duplikat.
 """
@@ -19,11 +21,31 @@ from datetime import datetime, timedelta
 
 import requests
 
+from sqlalchemy import or_
+
 from models import db, Activity, ActivityType
 
+# Kategoria zapasowa — używana tylko wtedy, gdy koloseum nie zwróciło typu
+# terminu (bardzo stara wersja API).
 KOLOSEUM_TYPE_NAME = "Koloseum"
 KOLOSEUM_TYPE_COLOR = "#be123c"
 KOLOSEUM_TYPE_ICON = "book"
+
+# Zapasowy słownik typów koloseum (wartość → (nazwa, kolor)) na wypadek
+# starszej wersji koloseum, która jeszcze nie zwraca `exam_type_label` i
+# `exam_type_color`. Aktualne koloseum jest źródłem prawdy — te pola mają
+# pierwszeństwo.
+KOLOSEUM_KNOWN_TYPES = {
+    "kolokwium":   ("Kolokwium",   "#4f46e5"),
+    "egzamin":     ("Egzamin",     "#dc2626"),
+    "kartkówka":   ("Kartkówka",   "#d97706"),
+    "deadline":    ("Deadline",    "#059669"),
+    "wyklad":      ("Wykład",      "#0284c7"),
+    "cwiczenia":   ("Ćwiczenia",   "#0d9488"),
+    "laboratoria": ("Laboratoria", "#c026d3"),
+    "zajecia":     ("Zajęcia",     "#db2777"),
+    "inne":        ("Inne",        "#64748b"),
+}
 
 EXTERNAL_PREFIX = "koloseum:exam:"
 
@@ -81,16 +103,42 @@ class KoloseumImportService:
         return {a.external_ref for a in query.all()}
 
     @staticmethod
-    def _get_or_create_type(owner_id: int | None, group_id: int | None) -> ActivityType:
-        query = ActivityType.query.filter(ActivityType.name.ilike(KOLOSEUM_TYPE_NAME))
-        query = query.filter(ActivityType.group_id == group_id) if group_id is not None \
-            else query.filter(ActivityType.group_id.is_(None), ActivityType.owner_id == owner_id)
-        activity_type = query.first()
-        if activity_type:
-            return activity_type
+    def _type_spec(exam: dict) -> tuple[str, str]:
+        """(nazwa, kolor) kategorii planowca odpowiadającej typowi terminu
+        w koloseum. Najpierw dane z API koloseum, potem zapasowy słownik."""
+        raw = (exam.get("exam_type") or "").strip()
+        known_name, known_color = KOLOSEUM_KNOWN_TYPES.get(raw, (None, None))
+        name = (exam.get("exam_type_label") or known_name or raw.capitalize()).strip()
+        color = exam.get("exam_type_color") or known_color or KOLOSEUM_TYPE_COLOR
+        if not name:
+            return KOLOSEUM_TYPE_NAME, KOLOSEUM_TYPE_COLOR
+        return name[:60], color
+
+    @staticmethod
+    def _get_or_create_type(owner_id: int | None, group_id: int | None,
+                            name: str = KOLOSEUM_TYPE_NAME,
+                            color: str = KOLOSEUM_TYPE_COLOR) -> ActivityType:
+        """Znajduje kategorię o danej nazwie w planie docelowym albo ją tworzy.
+
+        Jeśli taka kategoria już jest (np. domyślne "Inne" albo własne
+        "Wykład" użytkownika), używamy jej bez zmieniania koloru. W planie
+        prywatnym szukamy też wśród globalnych kategorii domyślnych —
+        inaczej powstałby duplikat np. "Inne"."""
+        query = ActivityType.query.filter(ActivityType.name.ilike(name))
+        if group_id is not None:
+            candidates = query.filter(ActivityType.group_id == group_id).all()
+        else:
+            candidates = query.filter(
+                ActivityType.group_id.is_(None),
+                or_(ActivityType.owner_id == owner_id, ActivityType.owner_id.is_(None)),
+            ).all()
+            # własna kategoria usera ma pierwszeństwo przed globalną
+            candidates.sort(key=lambda t: t.owner_id is None)
+        if candidates:
+            return candidates[0]
         activity_type = ActivityType(
-            name=KOLOSEUM_TYPE_NAME,
-            color=KOLOSEUM_TYPE_COLOR,
+            name=name,
+            color=color,
             icon=KOLOSEUM_TYPE_ICON,
             owner_id=owner_id if group_id is None else None,
             group_id=group_id,
@@ -107,7 +155,7 @@ class KoloseumImportService:
         if not exams:
             return 0
 
-        activity_type = KoloseumImportService._get_or_create_type(owner_id, group_id)
+        types_cache: dict[str, ActivityType] = {}
         count = 0
 
         for exam in exams:
@@ -126,6 +174,13 @@ class KoloseumImportService:
             except (KeyError, ValueError, TypeError):
                 continue
             end = start + timedelta(hours=1)
+
+            type_name, type_color = KoloseumImportService._type_spec(exam)
+            activity_type = types_cache.get(type_name.lower())
+            if activity_type is None:
+                activity_type = KoloseumImportService._get_or_create_type(
+                    owner_id, group_id, type_name, type_color)
+                types_cache[type_name.lower()] = activity_type
 
             title = (exam.get("title") or "Egzamin").strip()
             subject = (exam.get("subject") or "").strip()
